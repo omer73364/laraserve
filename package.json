@@ -1,0 +1,45 @@
+{
+  "name": "laraserve",
+  "version": "1.0.0",
+  "description": "A CLI tool for Effortless Local Laravel Development with Automatic SSL for Linux.",
+  "main": "index.js",
+  "bin": {
+    "laraserve": "./bin/laraserve.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "cli",
+    "apache",
+    "nginx",
+    "ssl",
+    "mkcert",
+    "local-development",
+    "web-server",
+    "development"
+  ],
+  "author": {
+    "name": "Omar Anwar",
+    "url": "https://github.com/omer73364"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/omer73364/laraserve.git"
+  },
+  "bugs": {
+    "url": "https://github.com/omer73364/laraserve/issues"
+  },
+  "homepage": "https://github.com/omer73364/laraserve",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "os": [
+    "linux"
+  ],
+  "dependencies": {
+    "inquirer": "^9.2.0",
+    "minimist": "^1.2.8"
+  }
+}
