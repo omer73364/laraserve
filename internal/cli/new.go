@@ -80,7 +80,9 @@ func cmdNew(args []string) error {
 			return err
 		}
 	}
-	ui.OK("Laravel app created in %s", root)
-	ui.Info("Start it with: laraserve serve %q", root)
+	ui.Fields("Project created",
+		ui.Field{Label: "Project", Value: root},
+		ui.Field{Label: "Next", Value: fmt.Sprintf("laraserve serve %q", root)},
+	)
 	return nil
 }

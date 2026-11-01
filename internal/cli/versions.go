@@ -41,16 +41,19 @@ func cmdVersions(args []string) error {
 	if err != nil {
 		return err
 	}
-	ui.Info("PHP: %s", php)
+	fields := []ui.Field{{Label: "Project", Value: root}, {Label: "PHP", Value: php}}
 	conn := detect.DatabaseConnection(root)
 	if conn == "mysql" || conn == "mariadb" {
 		mysql, err := versions.ProjectMySQL(root, runtime.MySQLVersions(), "", locked.MySQL)
 		if err != nil {
 			return err
 		}
-		ui.Info("MySQL: %s", mysql)
+		fields = append(fields, ui.Field{Label: "MySQL", Value: mysql})
 	}
-	ui.Info("Available PHP: %s", strings.Join(runtime.PHPVersions(), ", "))
-	ui.Info("Available MySQL: %s", strings.Join(runtime.MySQLVersions(), ", "))
+	ui.Fields("Selected runtimes", fields...)
+	ui.Fields("Available downloads",
+		ui.Field{Label: "PHP", Value: strings.Join(runtime.PHPVersions(), ", ")},
+		ui.Field{Label: "MySQL", Value: strings.Join(runtime.MySQLVersions(), ", ")},
+	)
 	return nil
 }

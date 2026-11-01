@@ -196,8 +196,12 @@ func cmdDoctor() error {
 	if err != nil {
 		return err
 	}
-	ui.Info("laraserve %s on %s/%s", runtime.Version, goruntime.GOOS, goruntime.GOARCH)
-	ui.Info("home: %s", c.home.Root)
+	ui.Fields("Environment",
+		ui.Field{Label: "Platform", Value: goruntime.GOOS + "/" + goruntime.GOARCH},
+		ui.Field{Label: "Home", Value: c.home.Root},
+		ui.Field{Label: "Projects", Value: fmt.Sprint(len(c.man.Projects))},
+	)
+	ui.Section("Health checks")
 	if rt, err := runtime.Ensure(c.home.Runtimes()); err != nil {
 		ui.Warn("runtime: %v", err)
 	} else {
@@ -214,7 +218,7 @@ func cmdDoctor() error {
 	if len(c.man.Hosts) > 0 {
 		ui.OK("hosts entries (%s): %v", hosts.Path(), c.man.Hosts)
 	}
-	ui.Info("known projects: %d", len(c.man.Projects))
+	ui.Section("Local ports")
 	for _, p := range []string{"8443", "8080", "443"} {
 		if l, err := net.Listen("tcp", "127.0.0.1:"+p); err != nil {
 			ui.Info("port %s: not available (%v)", p, shortErr(err))

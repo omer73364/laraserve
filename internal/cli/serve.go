@@ -86,6 +86,7 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	ui.Section("Preparing application")
 	ui.OK("Detected Laravel %s (PHP %s)", orDash(proj.Laravel), orDash(proj.PHPConstraint))
 	connection := detect.DatabaseConnection(root)
 	useMySQL := managedMySQL(fs, *mysqlF, connection)
@@ -197,6 +198,7 @@ func cmdServe(args []string) error {
 	var db *mysql.Server
 	var dbLifetime context.Context
 	if useMySQL {
+		ui.Section("Preparing database")
 		ui.Info("Using a private MySQL database (use --mysql=false to keep the project's external connection)")
 		base, err := runtime.EnsureMySQLVersion(c.home.Runtimes(), selectedMySQL)
 		if err != nil {
@@ -229,7 +231,7 @@ func cmdServe(args []string) error {
 		for k, v := range db.Env {
 			cfg.AppEnv[k] = v
 		}
-		ui.OK("MySQL %s ready (data: %s)", selectedMySQL, db.Dir)
+		ui.OK("MySQL %s ready", selectedMySQL)
 	}
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
 	if db != nil {
@@ -245,7 +247,7 @@ func cmdServe(args []string) error {
 		if err := st.EnsureMigrations(rt.PHP, root, cfg.Env, *migrate); err != nil {
 			return err
 		}
-		ui.OK("Using SQLite (%s)", st.SQLite)
+		ui.OK("SQLite ready")
 	} else {
 		ui.OK("Using project's database connection (%s)", connection)
 	}
@@ -294,16 +296,38 @@ func cmdServe(args []string) error {
 
 	// ---- 10. serve ----
 	err = serve.Run(cfg, func() {
-		ui.OK("Serving at %s", cfg.URL())
+		database := "External (" + connection + ")"
+		data := ""
+		if db != nil {
+			database = "MySQL " + selectedMySQL + " · private socket"
+			data = db.Dir
+		} else if connection == "sqlite" || connection == "" {
+			database = "SQLite"
+			data = st.SQLite
+		}
+		fields := []ui.Field{
+			{Label: "Local", Value: cfg.URL()},
+			{Label: "Project", Value: root},
+			{Label: "Framework", Value: "Laravel " + orDash(proj.Laravel)},
+			{Label: "PHP", Value: selectedPHP},
+			{Label: "Database", Value: database},
+		}
+		if data != "" {
+			fields = append(fields, ui.Field{Label: "Database data", Value: data})
+		}
 		if admin != nil {
-			ui.Info("phpMyAdmin: %s", admin.LoginURL)
+			fields = append(fields, ui.Field{Label: "phpMyAdmin", Value: admin.LoginURL})
 		}
 		if lan {
 			for _, ip := range certs.LANIPs() {
-				ui.Info("LAN: %s://%s:%d (other devices must trust %s)", map[bool]string{true: "https", false: "http"}[https], ip, port, filepath.Join(c.home.CA(), "ca.pem"))
+				fields = append(fields, ui.Field{Label: "LAN", Value: fmt.Sprintf("%s://%s:%d", map[bool]string{true: "https", false: "http"}[https], ip, port)})
 			}
 		}
-		ui.Info("Press Ctrl+C to stop")
+		fields = append(fields, ui.Field{Label: "Logs", Value: filepath.Join(st.Dir, "logs", "server.log")})
+		ui.Ready(fields...)
+		if lan && https {
+			ui.Info("LAN devices must trust %s", filepath.Join(c.home.CA(), "ca.pem"))
+		}
 	})
 	if db != nil && dbLifetime.Err() == nil {
 		select {
@@ -311,6 +335,9 @@ func cmdServe(args []string) error {
 			return fmt.Errorf("private MySQL stopped: %v; see %s", db.Err(), filepath.Join(db.Dir, "server.log"))
 		default:
 		}
+	}
+	if err == nil {
+		ui.OK("Application stopped")
 	}
 	return err
 }

@@ -41,14 +41,19 @@ serve flags:
   --mysql=false      use the project's external MySQL connection
   --phpmyadmin=false disable the local phpMyAdmin page for private MySQL
   --host-path        keep the host PATH (default: only laraserve's own binaries)
+  --allow-insecure-dependencies
+                     allow advisory-affected Composer packages for this installation
   --verbose          stream server logs
   -y, --yes          answer yes to prompts
 `
 
 func Run(args []string) int {
 	if len(args) == 0 {
-		fmt.Printf(usage, runtime.Version)
+		printHelp()
 		return 0
+	}
+	if action := map[string]string{"serve": "Local development, ready to run.", "new": "Create your next Laravel app.", "versions": "Project requirements and available runtimes.", "doctor": "Your local environment at a glance."}[args[0]]; action != "" {
+		ui.Header(runtime.Version, action)
 	}
 	var err error
 	switch args[0] {
@@ -73,7 +78,7 @@ func Run(args []string) int {
 	case "version", "--version", "-v":
 		fmt.Println("laraserve", runtime.Version)
 	case "help", "--help", "-h":
-		fmt.Printf(usage, runtime.Version)
+		printHelp()
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", args[0])
 		fmt.Fprintf(os.Stderr, usage, runtime.Version)
@@ -87,6 +92,15 @@ func Run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func printHelp() {
+	ui.Header(runtime.Version, "Serve Laravel locally with project-aware PHP and HTTPS.")
+	text := fmt.Sprintf(usage, runtime.Version)
+	if _, body, ok := strings.Cut(text, "\n\n"); ok {
+		text = body
+	}
+	fmt.Print(text)
 }
 
 // parse allows flags after positional arguments (laraserve serve ./app --http).
