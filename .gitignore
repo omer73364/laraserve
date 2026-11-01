@@ -1,0 +1,32 @@
+# Build outputs
+/bin/
+/dist/
+
+# Website files are buildless source; keep them under version control.
+!/website/dist/
+!/website/dist/**
+
+# Local hosting identity and generated code graph
+/website/.openai/
+/graphify-out/
+
+# Local agent/cloud configuration and secrets
+/.agents/
+/.codex/
+/.aws/
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Runtime payloads are downloaded on the client
+/internal/runtime/assets/frankenphp-*
+/internal/runtime/assets/composer.phar
+/internal/runtime/assets/SHA256SUMS
+/internal/runtime/assets/mysql-*.tar.*
+/internal/runtime/assets/phpmyadmin.tar.*
+
+# Editor and OS files
+.DS_Store
+*.swp
