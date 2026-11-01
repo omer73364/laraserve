@@ -1,0 +1,526 @@
+[
+  {
+    "Name": "libbrotli1",
+    "Version": "1.0.9-2ubuntu0.1",
+    "Libraries": [
+      "libbrotlidec.so.1",
+      "libbrotlicommon.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/b/brotli/libbrotli1_1.0.9-2ubuntu0.1_amd64.deb",
+      "SHA256": "908295e77a65219a62114c3c79690a3c99712274d1317c3ba47ffa2f8ea52ca5"
+    }
+  },
+  {
+    "Name": "libbsd0",
+    "Version": "0.11.5-1",
+    "Libraries": [
+      "libbsd.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libb/libbsd/libbsd0_0.11.5-1_amd64.deb",
+      "SHA256": "09367acdf59f28ffb71ba7bc36c516cff03b2765930cf9be7bb7ea7273e4c312"
+    }
+  },
+  {
+    "Name": "libbz2-1.0",
+    "Version": "1.0.8-5ubuntu0.1",
+    "Libraries": [
+      "libbz2.so.1.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/b/bzip2/libbz2-1.0_1.0.8-5ubuntu0.1_amd64.deb",
+      "SHA256": "2fd35bb1ac601fa1bf35da2fa08dba3541766ca791927342b5efcb18ef17aecb"
+    }
+  },
+  {
+    "Name": "libcom-err2",
+    "Version": "1.46.5-2ubuntu1.1",
+    "Libraries": [
+      "libcom_err.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/e/e2fsprogs/libcom-err2_1.46.5-2ubuntu1.1_amd64.deb",
+      "SHA256": "0b432aebe830682b1a303c1bb1a48fcb92fc5dc254d067ed7309b5c818d505a5"
+    }
+  },
+  {
+    "Name": "libcurl4",
+    "Version": "7.81.0-1ubuntu1.30",
+    "Libraries": [
+      "libcurl.so.4"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/c/curl/libcurl4_7.81.0-1ubuntu1.30_amd64.deb",
+      "SHA256": "2fc35b8056aebaa6cfe9a5672a8e06339c3e690657fbebc6c5d6b50d9f9626fb"
+    }
+  },
+  {
+    "Name": "libedit2",
+    "Version": "3.1-20210910-1build1",
+    "Libraries": [
+      "libedit.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libe/libedit/libedit2_3.1-20210910-1build1_amd64.deb",
+      "SHA256": "fb8783bdf0a59aaabf4e9b29192170f6cc17aa2eb94bc672c15add37ff39525b"
+    }
+  },
+  {
+    "Name": "libffi8",
+    "Version": "3.4.2-4",
+    "Libraries": [
+      "libffi.so.8"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libf/libffi/libffi8_3.4.2-4_amd64.deb",
+      "SHA256": "b4f88c91fa6f4c942097be6abfc365fb133c5e147640168cbb7704fd855eac10"
+    }
+  },
+  {
+    "Name": "libgcc-s1",
+    "Version": "12.3.0-1ubuntu1~22.04.3",
+    "Libraries": [
+      "libgcc_s.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-12/libgcc-s1_12.3.0-1ubuntu1~22.04.3_amd64.deb",
+      "SHA256": "d383e642d83263147f7b4b69fb92cf1036e5246c6be3accf10b77f986684589a"
+    }
+  },
+  {
+    "Name": "libgcrypt20",
+    "Version": "1.9.4-3ubuntu3.3",
+    "Libraries": [
+      "libgcrypt.so.20"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libg/libgcrypt20/libgcrypt20_1.9.4-3ubuntu3.3_amd64.deb",
+      "SHA256": "8f16329a0aabf4900271a3687890721bbef307e60983acae5b92eeff12e799b3"
+    }
+  },
+  {
+    "Name": "libgmp10",
+    "Version": "2:6.2.1+dfsg-3ubuntu1",
+    "Libraries": [
+      "libgmp.so.10"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/g/gmp/libgmp10_6.2.1+dfsg-3ubuntu1_amd64.deb",
+      "SHA256": "d199a77e11701d4d620dd4f62e05740e3072dce893856ea3bbaa6ae9fa19fef1"
+    }
+  },
+  {
+    "Name": "libgnutls30",
+    "Version": "3.7.3-4ubuntu1.9",
+    "Libraries": [
+      "libgnutls.so.30"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/g/gnutls28/libgnutls30_3.7.3-4ubuntu1.9_amd64.deb",
+      "SHA256": "65e08f0b5d1e620cc5cc9478cd1035f83ea752a6fae23141afd2d111a8f6c555"
+    }
+  },
+  {
+    "Name": "libgpg-error0",
+    "Version": "1.43-3",
+    "Libraries": [
+      "libgpg-error.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libg/libgpg-error/libgpg-error0_1.43-3_amd64.deb",
+      "SHA256": "1fbacdf9bd1e431cee874a697b339f6f925182bc79bba5a112b53669b33265c5"
+    }
+  },
+  {
+    "Name": "libgssapi-krb5-2",
+    "Version": "1.19.2-2ubuntu0.8",
+    "Libraries": [
+      "libgssapi_krb5.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/k/krb5/libgssapi-krb5-2_1.19.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "eae58c03ae123a35a36ba627ad7e699407665132219da8686d092e4510189fb2"
+    }
+  },
+  {
+    "Name": "libhogweed6",
+    "Version": "3.7.3-1build2",
+    "Libraries": [
+      "libhogweed.so.6"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/nettle/libhogweed6_3.7.3-1build2_amd64.deb",
+      "SHA256": "2402ac51ebc760799b01f3fd4933126c5eb446e5b043832601fb589f5e50c363"
+    }
+  },
+  {
+    "Name": "libicu70",
+    "Version": "70.1-2",
+    "Libraries": [
+      "libicuio.so.70",
+      "libicui18n.so.70",
+      "libicuuc.so.70",
+      "libicudata.so.70"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/i/icu/libicu70_70.1-2_amd64.deb",
+      "SHA256": "58a154f6307289813da2276f900498ef536ae7c0522d2cf31a3c3c5cf62dfd9a"
+    }
+  },
+  {
+    "Name": "libidn2-0",
+    "Version": "2.3.2-2build1",
+    "Libraries": [
+      "libidn2.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libi/libidn2/libidn2-0_2.3.2-2build1_amd64.deb",
+      "SHA256": "bc935e1871aa4a75d3f4ff549af32b7316aecfbea2200d85055878767b8398c8"
+    }
+  },
+  {
+    "Name": "libjpeg-turbo8",
+    "Version": "2.1.2-0ubuntu1",
+    "Libraries": [
+      "libjpeg.so.8"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libj/libjpeg-turbo/libjpeg-turbo8_2.1.2-0ubuntu1_amd64.deb",
+      "SHA256": "bb9538fa94f06bf6b7907105439f0a0a30e3ec27030832820a6c2cc2dc6578a8"
+    }
+  },
+  {
+    "Name": "libk5crypto3",
+    "Version": "1.19.2-2ubuntu0.8",
+    "Libraries": [
+      "libk5crypto.so.3"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/k/krb5/libk5crypto3_1.19.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "b3bc3cfae9aa0627696bc7ab7e14f5fbfb7a7bdb663eb31b5ea8b36d224c64a0"
+    }
+  },
+  {
+    "Name": "libkeyutils1",
+    "Version": "1.6.1-2ubuntu3",
+    "Libraries": [
+      "libkeyutils.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/k/keyutils/libkeyutils1_1.6.1-2ubuntu3_amd64.deb",
+      "SHA256": "940daf78ee0229549b4eabc92ffd79dd038ed96a44e2e912305a23540cf22a0a"
+    }
+  },
+  {
+    "Name": "libkrb5-3",
+    "Version": "1.19.2-2ubuntu0.8",
+    "Libraries": [
+      "libkrb5.so.3"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/k/krb5/libkrb5-3_1.19.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "66b4243655dd82e2ca25a76a9b587986b42589e4d39943a44c733b7a6902010c"
+    }
+  },
+  {
+    "Name": "libkrb5support0",
+    "Version": "1.19.2-2ubuntu0.8",
+    "Libraries": [
+      "libkrb5support.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/k/krb5/libkrb5support0_1.19.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "e678de61ab524644aeea7b42499f8143d5ed7019c698070ca84283da70eb3f57"
+    }
+  },
+  {
+    "Name": "libldap-2.5-0",
+    "Version": "2.5.16+dfsg-0ubuntu0.22.04.2",
+    "Libraries": [
+      "libldap-2.5.so.0",
+      "liblber-2.5.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/o/openldap/libldap-2.5-0_2.5.16+dfsg-0ubuntu0.22.04.2_amd64.deb",
+      "SHA256": "b76312f703b42eb976d949581110b938a5b0bf4d9021acde0baeacd2e8942ac8"
+    }
+  },
+  {
+    "Name": "liblzma5",
+    "Version": "5.2.5-2ubuntu1.2",
+    "Libraries": [
+      "liblzma.so.5"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/x/xz-utils/liblzma5_5.2.5-2ubuntu1.2_amd64.deb",
+      "SHA256": "a88fca7506963c443c42a578db6c35424336ae28abcdaa60c89f06d30aeb625b"
+    }
+  },
+  {
+    "Name": "libmd0",
+    "Version": "1.0.4-1build1",
+    "Libraries": [
+      "libmd.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libm/libmd/libmd0_1.0.4-1build1_amd64.deb",
+      "SHA256": "bcdad5e400aeb660f0337a1c5c1a77e3effa91d0803e64ce2d000e9006f67cdb"
+    }
+  },
+  {
+    "Name": "libnettle8",
+    "Version": "3.7.3-1build2",
+    "Libraries": [
+      "libnettle.so.8"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/nettle/libnettle8_3.7.3-1build2_amd64.deb",
+      "SHA256": "6da09e685e5587f8873f662b007de45f75424fb33d2c4a51837380e683d33c7e"
+    }
+  },
+  {
+    "Name": "libnghttp2-14",
+    "Version": "1.43.0-1ubuntu0.4",
+    "Libraries": [
+      "libnghttp2.so.14"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/nghttp2/libnghttp2-14_1.43.0-1ubuntu0.4_amd64.deb",
+      "SHA256": "6e968d1ed7abb3635a3b0707ebfa20cd368ce784f83cc567b11c0723217a6de4"
+    }
+  },
+  {
+    "Name": "libonig5",
+    "Version": "6.9.7.1-2build1",
+    "Libraries": [
+      "libonig.so.5"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libo/libonig/libonig5_6.9.7.1-2build1_amd64.deb",
+      "SHA256": "b02dbaa37b4ec7ad303cc8655b03a2a158299ce56fede9849e3bda501831f413"
+    }
+  },
+  {
+    "Name": "libp11-kit0",
+    "Version": "0.24.0-6ubuntu0.1",
+    "Libraries": [
+      "libp11-kit.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/p/p11-kit/libp11-kit0_0.24.0-6ubuntu0.1_amd64.deb",
+      "SHA256": "9d949950970a062a81051a78ec4075b8dba608f063afaa5c8752a612d139a9b5"
+    }
+  },
+  {
+    "Name": "libpcre2-8-0",
+    "Version": "10.39-3ubuntu0.1",
+    "Libraries": [
+      "libpcre2-8.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/p/pcre2/libpcre2-8-0_10.39-3ubuntu0.1_amd64.deb",
+      "SHA256": "01a5a74f3d305cad32fffffdc200c2a92fd8e5a01bff97de76ac598fb444d53e"
+    }
+  },
+  {
+    "Name": "libpng16-16",
+    "Version": "1.6.37-3ubuntu0.7",
+    "Libraries": [
+      "libpng16.so.16"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libp/libpng1.6/libpng16-16_1.6.37-3ubuntu0.7_amd64.deb",
+      "SHA256": "f0e18c46205e6b1bf9eb20ed97037c128f03cf27c1ff818f442a9cc173f8a002"
+    }
+  },
+  {
+    "Name": "libpsl5",
+    "Version": "0.21.0-1.2build2",
+    "Libraries": [
+      "libpsl.so.5"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libp/libpsl/libpsl5_0.21.0-1.2build2_amd64.deb",
+      "SHA256": "cd29dee0eac2bdf3f944f47b3926993827dc6b3710251df76006fab2fd09f7e1"
+    }
+  },
+  {
+    "Name": "libreadline8",
+    "Version": "8.1.2-1",
+    "Libraries": [
+      "libreadline.so.8"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/r/readline/libreadline8_8.1.2-1_amd64.deb",
+      "SHA256": "51fd16f608efa710c987e4b071ffba0bec63a9ac8e55eddd5770f5e5252edc09"
+    }
+  },
+  {
+    "Name": "librtmp1",
+    "Version": "2.4+20151223.gitfa8646d.1-2build4",
+    "Libraries": [
+      "librtmp.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/r/rtmpdump/librtmp1_2.4+20151223.gitfa8646d.1-2build4_amd64.deb",
+      "SHA256": "c8bdaa1e777d08888914e922f8f76441c26ee36438d3aa59161ecccc2421f77e"
+    }
+  },
+  {
+    "Name": "libsasl2-2",
+    "Version": "2.1.27+dfsg2-3ubuntu1.2",
+    "Libraries": [
+      "libsasl2.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/c/cyrus-sasl2/libsasl2-2_2.1.27+dfsg2-3ubuntu1.2_amd64.deb",
+      "SHA256": "391cb48d7e601d5bb590da8d426750acf6c987241ba280a36227873b94f20cee"
+    }
+  },
+  {
+    "Name": "libsodium23",
+    "Version": "1.0.18-1ubuntu0.22.04.1",
+    "Libraries": [
+      "libsodium.so.23"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libs/libsodium/libsodium23_1.0.18-1ubuntu0.22.04.1_amd64.deb",
+      "SHA256": "64bc0959a8ef3dd6d5ad8b347f8aa9a2a0e585e1f696340f9daa2c643ebefd11"
+    }
+  },
+  {
+    "Name": "libsqlite3-0",
+    "Version": "3.37.2-2ubuntu0.8",
+    "Libraries": [
+      "libsqlite3.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/libsqlite3-0_3.37.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "6e22b1e8d375fed6a1d52cad5887e762b6cdeaba137595e726c95486968dfab5"
+    }
+  },
+  {
+    "Name": "libssh-4",
+    "Version": "0.9.6-2ubuntu0.22.04.8",
+    "Libraries": [
+      "libssh.so.4"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libs/libssh/libssh-4_0.9.6-2ubuntu0.22.04.8_amd64.deb",
+      "SHA256": "ebeff6b7c3777c5ae0a2fd4200c3a946f3e866d102d7c56d46c997af8ebc2138"
+    }
+  },
+  {
+    "Name": "libssl3",
+    "Version": "3.0.2-0ubuntu1.30",
+    "Libraries": [
+      "libssl.so.3",
+      "libcrypto.so.3"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl3_3.0.2-0ubuntu1.30_amd64.deb",
+      "SHA256": "d1b4636e32ac6d3b95d583ac05ac548b1aa248414bae1c51b14f54be0f8fd7bc"
+    }
+  },
+  {
+    "Name": "libstdc++6",
+    "Version": "12.3.0-1ubuntu1~22.04.3",
+    "Libraries": [
+      "libstdc++.so.6"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/g/gcc-12/libstdc++6_12.3.0-1ubuntu1~22.04.3_amd64.deb",
+      "SHA256": "29ef3d289b272704b75141906c8f683db0f2bdb0942061366691333bfb289bdc"
+    }
+  },
+  {
+    "Name": "libtasn1-6",
+    "Version": "4.18.0-4ubuntu0.2",
+    "Libraries": [
+      "libtasn1.so.6"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libt/libtasn1-6/libtasn1-6_4.18.0-4ubuntu0.2_amd64.deb",
+      "SHA256": "a0903b4fae3ac2548a22d8822382e6d23586e42196d83ff67e82df36cd39fc6c"
+    }
+  },
+  {
+    "Name": "libtinfo6",
+    "Version": "6.3-2ubuntu0.3",
+    "Libraries": [
+      "libtinfo.so.6"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/ncurses/libtinfo6_6.3-2ubuntu0.3_amd64.deb",
+      "SHA256": "3b8dff43a31168f5020928f2ab9a97324c5b47ae708311781f6bd01306c96214"
+    }
+  },
+  {
+    "Name": "libunistring2",
+    "Version": "1.0-1",
+    "Libraries": [
+      "libunistring.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libu/libunistring/libunistring2_1.0-1_amd64.deb",
+      "SHA256": "988fb59de6a0a313844277e8a6e45d3dc16f5ea75a603a46b16b936426f0ac65"
+    }
+  },
+  {
+    "Name": "libxml2",
+    "Version": "2.9.13+dfsg-1ubuntu0.14",
+    "Libraries": [
+      "libxml2.so.2"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libx/libxml2/libxml2_2.9.13+dfsg-1ubuntu0.14_amd64.deb",
+      "SHA256": "16e395b2c52d6ab232053468febc69f0876956ec2fae357a941a2a8dab36574f"
+    }
+  },
+  {
+    "Name": "libxslt1.1",
+    "Version": "1.1.34-4ubuntu0.22.04.5",
+    "Libraries": [
+      "libxslt.so.1",
+      "libexslt.so.0"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libx/libxslt/libxslt1.1_1.1.34-4ubuntu0.22.04.5_amd64.deb",
+      "SHA256": "5e50bc83e9365942cf63272d8a45ce71170aaf4a1a4e3c4b30f591f6194d77ef"
+    }
+  },
+  {
+    "Name": "libzstd1",
+    "Version": "1.4.8+dfsg-3build1",
+    "Libraries": [
+      "libzstd.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/libz/libzstd/libzstd1_1.4.8+dfsg-3build1_amd64.deb",
+      "SHA256": "ae7db00ce8b093e50c994518b90203544e063b4bc574836a048bb142b950b2c9"
+    }
+  },
+  {
+    "Name": "zlib1g",
+    "Version": "1:1.2.11.dfsg-2ubuntu9.2",
+    "Libraries": [
+      "libz.so.1"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/z/zlib/zlib1g_1.2.11.dfsg-2ubuntu9.2_amd64.deb",
+      "SHA256": "9dc17e51a1be2d9ed63b7b84ef0e4e29c5abe6f1bc62cb03e7181483cce8a2f2"
+    }
+  },
+  {
+    "Name": "libzip4",
+    "Version": "1.7.3-1ubuntu2",
+    "Libraries": [
+      "libzip.so.4"
+    ],
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/universe/libz/libzip/libzip4_1.7.3-1ubuntu2_amd64.deb",
+      "SHA256": "e129c629f11c1c6b6b8886a3562a56461e4972878c8d859a10cb8d05a08213e9"
+    }
+  }
+]
