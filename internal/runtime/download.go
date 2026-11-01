@@ -106,7 +106,8 @@ func downloadFile(source downloadSource, dst, label string) error {
 		return err
 	}
 	h := sha256.New()
-	p := &downloadProgress{label: label, total: resp.ContentLength, last: time.Now()}
+	p := ui.NewProgress(label, resp.ContentLength)
+	defer p.Finish()
 	n, copyErr := io.Copy(io.MultiWriter(f, h, p), io.LimitReader(resp.Body, 2<<30))
 	closeErr := f.Close()
 	if copyErr != nil {
@@ -121,25 +122,7 @@ func downloadFile(source downloadSource, dst, label string) error {
 	if hex.EncodeToString(h.Sum(nil)) != source.SHA256 {
 		return fmt.Errorf("checksum mismatch downloading %s; retry or check the configured source", label)
 	}
-	ui.OK("%s downloaded and verified (%.1f MB)", label, float64(n)/(1024*1024))
+	p.Finish()
+	ui.OK("%s downloaded and verified (%s)", label, ui.Bytes(n))
 	return nil
-}
-
-type downloadProgress struct {
-	label    string
-	total, n int64
-	last     time.Time
-}
-
-func (p *downloadProgress) Write(b []byte) (int, error) {
-	p.n += int64(len(b))
-	if time.Since(p.last) >= 5*time.Second {
-		if p.total > 0 {
-			ui.Info("%s: %.0f%%", p.label, float64(p.n)*100/float64(p.total))
-		} else {
-			ui.Info("%s: %.1f MB", p.label, float64(p.n)/(1024*1024))
-		}
-		p.last = time.Now()
-	}
-	return len(b), nil
 }
