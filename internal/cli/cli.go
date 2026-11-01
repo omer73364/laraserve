@@ -1,0 +1,142 @@
+// Package cli implements the laraserve commands.
+package cli
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+
+	"laraserve/internal/manifest"
+	"laraserve/internal/paths"
+	"laraserve/internal/runtime"
+	"laraserve/internal/ui"
+)
+
+const usage = `laraserve %s - serve any Laravel app over HTTPS, with no PHP/Composer installed
+
+Usage:
+  laraserve new <path> [--version CONSTRAINT] [--php-version V] [--host-path]
+  laraserve serve [path|bundle.laraserve] [flags]
+  laraserve pack  [path] [-o app.laraserve] [--include-env]
+  laraserve trust | untrust      install / remove the local CA in the OS trust store
+  laraserve clean [path]         remove vendor/ (if laraserve made it), state, hosts entries
+  laraserve uninstall            remove everything laraserve ever created
+  laraserve versions [path]      show selected and available runtime versions
+  laraserve doctor | version
+
+serve flags:
+  --domain NAME      serve on NAME (e.g. testapp.test); default localhost
+  --http             plain HTTP (no CA, no trust prompt) on :8080
+  --port N           listen port (default 8443 https / 8080 http; 443 is tried with --domain)
+  --host ADDR        bind address (default 127.0.0.1; 0.0.0.0 exposes to the LAN)
+  --allow-domain S   let the local CA also sign names under suffix S (comma separated)
+  --no-trust         do not install the CA in the OS trust store
+  --no-hosts         do not edit the hosts file (falls back to NAME.localhost)
+  --copy             run on a copy of the project; the original is never touched
+  --migrate          run pending migrations for SQLite or private MySQL
+  --php-version V    select a project-compatible PHP version (e.g. 8.3)
+  --mysql-version V  select private MySQL version (e.g. 8.0 or 8.4)
+  --mysql            force private MySQL (auto-detected from project settings)
+  --mysql=false      use the project's external MySQL connection
+  --phpmyadmin=false disable the local phpMyAdmin page for private MySQL
+  --host-path        keep the host PATH (default: only laraserve's own binaries)
+  --verbose          stream server logs
+  -y, --yes          answer yes to prompts
+`
+
+func Run(args []string) int {
+	if len(args) == 0 {
+		fmt.Printf(usage, runtime.Version)
+		return 0
+	}
+	var err error
+	switch args[0] {
+	case "new":
+		err = cmdNew(args[1:])
+	case "versions":
+		err = cmdVersions(args[1:])
+	case "serve":
+		err = cmdServe(args[1:])
+	case "pack":
+		err = cmdPack(args[1:])
+	case "trust":
+		err = cmdTrust(args[1:])
+	case "untrust":
+		err = cmdUntrust(args[1:])
+	case "clean":
+		err = cmdClean(args[1:])
+	case "uninstall":
+		err = cmdUninstall(args[1:])
+	case "doctor":
+		err = cmdDoctor()
+	case "version", "--version", "-v":
+		fmt.Println("laraserve", runtime.Version)
+	case "help", "--help", "-h":
+		fmt.Printf(usage, runtime.Version)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", args[0])
+		fmt.Fprintf(os.Stderr, usage, runtime.Version)
+		return 2
+	}
+	if err != nil {
+		if err == flag.ErrHelp {
+			return 0
+		}
+		ui.Err("%v", err)
+		return 1
+	}
+	return 0
+}
+
+// parse allows flags after positional arguments (laraserve serve ./app --http).
+func parse(fs *flag.FlagSet, args []string) error {
+	var flags, pos []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			pos = append(pos, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(a, "-") && len(a) > 1 {
+			flags = append(flags, a)
+			name := strings.TrimLeft(a, "-")
+			if strings.Contains(name, "=") {
+				continue
+			}
+			if f := fs.Lookup(name); f != nil {
+				bf, ok := f.Value.(interface{ IsBoolFlag() bool })
+				if (!ok || !bf.IsBoolFlag()) && i+1 < len(args) {
+					i++
+					flags = append(flags, args[i])
+				}
+			}
+			continue
+		}
+		pos = append(pos, a)
+	}
+	return fs.Parse(append(flags, pos...))
+}
+
+func yesFlags(fs *flag.FlagSet) *bool {
+	y := fs.Bool("yes", false, "")
+	fs.BoolVar(y, "y", false, "")
+	return y
+}
+
+type ctx struct {
+	home *paths.Home
+	man  *manifest.Manifest
+}
+
+func load() (*ctx, error) {
+	h, err := paths.New()
+	if err != nil {
+		return nil, err
+	}
+	m, err := manifest.Load(h.Manifest())
+	if err != nil {
+		return nil, err
+	}
+	return &ctx{home: h, man: m}, nil
+}
