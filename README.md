@@ -1,88 +1,113 @@
-# laraserve
+<div align="center">
 
-Serve any Laravel app over **HTTPS by default** on a machine with **no PHP, Composer or web server installed**.
-A small Go executable downloads [FrankenPHP](https://frankenphp.dev) (PHP + Caddy),
-Composer, MySQL and phpMyAdmin **on the client, only when needed**, and caches them
-in `~/.laraserve/runtimes/`. Later runs can serve prepared apps offline.
+<img src="website/dist/favicon.svg" width="64" height="64" alt="LaraServe logo">
 
-```
-laraserve new my-app                    # create a Laravel app (needs internet or Composer cache)
-laraserve serve                          # https://localhost:8443
-laraserve serve --domain testapp.test    # https://testapp.test (443 if allowed, else :8443)
-laraserve serve my-app                   # detects MySQL settings and opens local phpMyAdmin
-laraserve serve my-app --mysql           # force private MySQL for an app using another database
-laraserve serve --http                   # http://localhost:8080  (no CA, no trust prompt, no host change)
-laraserve serve ./other-app --copy       # run on a copy, original untouched
-laraserve serve app.laraserve            # serve an offline bundle
-laraserve pack                           # bundle app + vendor/ + built assets (run where you have internet)
-laraserve trust | untrust                # install / remove the local CA
-laraserve clean | uninstall              # reverse everything, driven by ~/.laraserve/manifest.json
-laraserve doctor
-```
+# ⚡ LaraServe
 
-## Build
+**Less setup. More Laravel.**
 
-Building does not download or embed server binaries. The executable contains only
-LaraServe and its small PHP configuration.
+Run Laravel locally with project-aware PHP, HTTPS, and a private database.<br>
+No global PHP, Composer, MySQL, or Docker installation required.
+
+![Go 1.21+](https://img.shields.io/badge/Go-1.21%2B-00ADD8?style=flat-square&logo=go&logoColor=white)
+![Local HTTPS](https://img.shields.io/badge/HTTPS-local_by_default-C4F278?style=flat-square)
+![Tested on Linux](https://img.shields.io/badge/Linux-tested-FCC624?style=flat-square&logo=linux&logoColor=black)
+
+[Quick start](#-quick-start) · [Features](#-features) · [Versions](#-project-versions) · [Documentation](#-documentation)
+
+</div>
+
+---
+
+## 🚀 Quick start
+
+From the LaraServe source directory, build the client with **Go 1.21+**:
 
 ```bash
-make build                  # builds the small bin/laraserve client
-make dist                   # cross-compiles small clients; no runtime downloads
-make test
+make build
+./bin/laraserve serve /path/to/your-laravel-app
 ```
 
-Requires Go 1.21+ on the build machine. Copy `bin/laraserve` to the client machine;
-its first use downloads the required runtime over HTTPS and checks its SHA-256.
-A failed or interrupted download is retried next time; completed tools are reused
-without contacting the network. Internet is required for first use of each tool,
-and for new application dependencies unless already cached.
+Open the URL printed in the terminal—normally **https://localhost:8443**. Follow the prompts to trust the local certificate authority.
 
-For development, `LARASERVE_FRANKENPHP=/path/to/frankenphp` uses an existing binary.
-
-## Create a Laravel app
+Copy `bin/laraserve` to a directory on your `PATH` to use the shorter commands below. Go is needed only to build LaraServe, not to run the resulting executable.
 
 ```bash
+# Create a new Laravel app
 laraserve new my-app
-laraserve new ./apps/my-app --version "^12.0"
+
+# Serve it locally
 laraserve serve my-app
+
+# Or use HTTP without certificate setup
+laraserve serve my-app --http
 ```
 
-`new` uses the cached PHP and Composer to run `composer create-project laravel/laravel`.
-The destination must be new or empty. Composer installs dependencies and runs the skeleton's setup scripts; no host PHP or Composer is required. Without `--version`, Composer chooses
-a stable version compatible with the downloaded PHP. Use `--host-path` if installation needs
-host tools such as Git or an archive extractor. Frontend assets still need your own Node tooling.
-If installation fails, partial files are kept for inspection; use a fresh destination to retry.
-Created applications belong to you and are not deleted by `clean` or `uninstall`.
+> 💡 The client contains configuration and download catalogues, not embedded server binaries. First use downloads the tools it needs and verifies their SHA-256 checksums. Prepared apps can run offline once their runtimes and dependencies are cached.
 
-## What it does
+**Frontend assets need your own Node tooling.** LaraServe does not install Node or run your asset build.
 
-1. **Detect** – needs `artisan` and `laravel/framework` in `composer.json`.
-2. **Download** PHP into `~/.laraserve/runtimes/` on first use (SHA-256 verified).
-   Composer downloads only for `new` or missing dependencies; MySQL and phpMyAdmin
-   download only when selected.
-3. **Scrub the environment** – own `php.ini` (`PHPRC`, empty `PHP_INI_SCAN_DIR`), private `COMPOSER_HOME`,
-   `XDG_*`, and a `PATH` containing only laraserve's binaries (`--host-path` to keep yours).
-4. **Prepare** – `APP_KEY`, SQLite DB, storage and bootstrap caches live in `~/.laraserve/projects/<id>/` and are
-   passed as environment variables (real env vars override `.env`), so **modern Laravel projects are not modified** (Laravel 8 uses its own storage directory; see below).
-   Only `vendor/` is added if it was missing (needs network/Composer cache; otherwise use a bundle).
-   MySQL/MariaDB settings start private MySQL by default (`--mysql=false` uses your external connection).
-   Other configured connections are respected; otherwise SQLite is used and migrated.
-   SQLite setup is marked ready only after migrations succeed; failures stop startup and are retried next time.
-   Use `laraserve serve <path> --migrate` to apply migrations added after initial setup.
-5. **TLS** – a local, **name-constrained** CA (may only sign `localhost`, `*.test`, loopback and private IPs;
-   extend with `--allow-domain`) issues the leaf certificate.
-6. **Serve** – FrankenPHP on `127.0.0.1` (`--host 0.0.0.0` for LAN).
+---
 
-## Project PHP and MySQL versions
+## ✨ Features
+
+| | Feature | What it does |
+|---|---|---|
+| 🐘 | **Project-aware PHP** | Reads Composer requirements and locked dependencies; supports explicit version pins. |
+| 🔒 | **HTTPS by default** | Serves through Caddy with a constrained local certificate authority. |
+| 🗄️ | **Private MySQL** | Detects MySQL settings and starts a separate, persistent database for the app. |
+| 🧭 | **Local phpMyAdmin** | Prints a temporary sign-in link for browsing tables and running queries. |
+| 📦 | **Downloads on demand** | Caches verified runtimes and missing supported libraries on the client. |
+| 🌱 | **App creation** | Creates Laravel projects through Composer without a global PHP installation. |
+| 🧳 | **App bundles** | Packages dependencies and built assets into a `.laraserve` file. |
+| 🧹 | **Recorded cleanup** | Tracks managed state, hosts entries, and certificate trust for later removal. |
+
+---
+
+## 🧰 Everyday commands
+
+| | Command | Purpose |
+|---|---|---|
+| ▶️ | `laraserve serve [path]` | Serve the current project or another app. |
+| 🆕 | `laraserve new <path>` | Create an app in a new or empty directory. |
+| 🎛️ | `laraserve versions [path]` | Show selected and available runtime versions without downloading them. |
+| 📦 | `laraserve pack [path] -o app.laraserve` | Bundle an app with its dependencies and existing built assets. |
+| 🔐 | `laraserve trust` / `laraserve untrust` | Install or remove local CA trust. |
+| 🩺 | `laraserve doctor` | Inspect local setup. |
+| 🧽 | `laraserve clean [path]` | Remove recorded project state and managed project artifacts. |
+| 🗑️ | `laraserve uninstall` | Remove LaraServe-managed state and data after confirmation. |
+| 🏷️ | `laraserve version` | Print the client version. |
 
 ```bash
-laraserve serve ./my-app                         # detects project requirements
-laraserve versions ./my-app                      # shows selected/available versions
-laraserve serve ./my-app --php-version 8.3 --mysql-version 8.0
-laraserve new my-app --php-version 8.3            # also writes .php-version
+# A development domain; tries port 443, then falls back to 8443
+laraserve serve my-app --domain my-app.test
+
+# Work on a copy
+laraserve serve ./other-app --copy
+
+# Apply migrations added since the initial setup
+laraserve serve my-app --migrate
+
+# Choose a Laravel skeleton and PHP version
+laraserve new my-app --version "^12.0" --php-version 8.3
 ```
 
-For explicit, shareable project pins, add `.laraserve.json`:
+<details>
+<summary>🌱 How app creation works</summary>
+
+`new` runs `composer create-project laravel/laravel` with the selected PHP runtime. Composer installs dependencies and runs the skeleton's setup scripts. It does not run the interactive Laravel installer wizard.
+
+Without `--version`, Composer selects a stable skeleton compatible with that PHP version. Use `--host-path` when installation needs host tools such as Git or an archive extractor.
+
+If creation fails, partial files stay available for inspection. Choose a fresh destination to retry. Created app folders are yours; `clean` and `uninstall` do not delete the app itself.
+
+</details>
+
+---
+
+## 🎛️ Project versions
+
+LaraServe detects project requirements automatically. For shareable pins, commit a `.laraserve.json` file:
 
 ```json
 {
@@ -91,197 +116,116 @@ For explicit, shareable project pins, add `.laraserve.json`:
 }
 ```
 
-PHP selection honors command flags, `.laraserve.json`, `.php-version`, then
-Composer's `config.platform.php` (minor version). It checks root requirements,
-locked dependencies including development packages, and PHP conflicts. Without
-an explicit pin it chooses the lowest compatible supported PHP minor with the
-current catalogued patch. A pin such as `8.3` selects the current 8.3 patch;
-an exact patch pin must be available in the catalogue. Incompatible pins fail
-before the app starts. Projects without a PHP requirement use PHP 8.5.
+```bash
+laraserve versions ./my-app
+laraserve serve ./my-app --php-version 8.3 --mysql-version 8.0
+```
 
-MySQL selection honors command flags, `.laraserve.json`, `.mysql-version`,
-`.env` (`MYSQL_VERSION` / `DB_VERSION`), then MySQL image tags in Compose files.
-MySQL version requirements cannot be inferred from `DB_CONNECTION=mysql` alone;
-projects without another hint use 8.4. Multiple conflicting Compose tags require
-an explicit pin. MariaDB version numbers are not MySQL version numbers.
+PHP pins must satisfy the project's Composer requirements, locked dependencies, and conflicts. A minor pin selects a catalogued patch; exact patch pins must exist in the catalogue. Compatible resolved versions are remembered in private project state.
 
-Resolved versions are saved under the project's private LaraServe state in
-`runtime-versions.json`, keeping subsequent runs stable while they remain
-compatible with the project. Runtime downloads are cached separately by version
-and checksum. PHP switching is supported on Linux amd64/arm64 for PHP 8.0–8.5.
-PHP 7.4 is available on Linux amd64 with glibc 2.35+ (including Ubuntu 22.04/24.04).
-macOS arm64 currently supports the default PHP 8.5 runtime. Available MySQL
-families are 8.0 and 8.4 on Linux amd64. Run `versions` for exact catalogue patches.
+| | Platform | Automatic PHP runtimes | Automatic MySQL runtimes |
+|---|---|---|---|
+| 🐧 | Linux amd64 | PHP 7.4 and 8.0–8.5 | MySQL 8.0 and 8.4 |
+| 🦾 | Linux arm64 | PHP 8.0–8.5 | Not provided |
+| 🍎 | macOS arm64 | Default PHP 8.5 | Not provided |
+| 🪟 | Windows | Not implemented | Not implemented |
 
-PHP 8.5 uses FrankenPHP directly. PHP 8.2–8.4 use checksum-verified portable PHP
-builds from `nunomaduro/static-php-builds`, with the same Caddy HTTPS frontend.
-Those versions use PHP's development server on a private loopback port; this is
-intended for local development. A matching Composer is included in those PHP
-archives. The CLI and web requests both use the selected PHP version.
+PHP 7.4 requires **glibc 2.35+**, including Ubuntu 22.04/24.04. MySQL 8.0 requires glibc 2.17+; MySQL 8.4 requires glibc 2.28+. Linux is tested; macOS runtime paths remain untested. A cross-compiled client does not guarantee automatic runtime availability.
 
-### Laravel 8 and older PHP
+<details>
+<summary>🕰️ Laravel 8 and older PHP</summary>
+
+Laravel 8.83.29 has been exercised with PHP **7.4.33**, **8.0.30**, and **8.1.34**, including web requests and database migrations. An existing app's locked dependencies still determine which versions it can use.
 
 ```bash
 laraserve serve ./old-app --php-version 7.4
 laraserve serve ./old-app --php-version 8.0
 laraserve serve ./old-app --php-version 8.1
+```
+
+Composer can block a fresh Laravel 8 install because its dependencies have known security advisories. For deliberate legacy compatibility work, an explicit opt-in is available:
+
+```bash
 laraserve new old-app --version "^8.0" --php-version 7.4 --allow-insecure-dependencies
 ```
 
-Available legacy patches are PHP 7.4.33, 8.0.30 and 8.1.34. Existing projects are
-selected from their Composer requirements and lock file; `.php-version` and
-`.laraserve.json` pins work the same way as for newer PHP. Both Artisan and web
-requests use the selected version. Dependencies that exclude that PHP version
-are still rejected.
+The option also works on `serve` when it installs missing dependencies. It allows advisory-affected packages for that Composer invocation; PHP platform checks and malware policies remain enabled. It does not edit the project's policy.
 
-PHP 8.0/8.1 use checksum-pinned static CLI builds mirrored by
-`heera/php-binaries` on Linux amd64/arm64. PHP 7.4 uses matching CLI and extension
-packages from Ondřej Surý's PHP repository for Ubuntu 22.04, extracted privately
-on Linux amd64 (glibc 2.35+). Missing support libraries are downloaded from
-checksum-pinned official Ubuntu packages into a shared `runtimes/php-support/`
-cache. There is no global PHP install, no package install script execution, and
-no compiler or Docker requirement. PHP 7.4 includes JSON, Phar, PDO/MySQL/SQLite,
-cURL, mbstring, XML, intl, ZIP and other common Laravel extensions. Custom mirror
-archives can still use `LARASERVE_PHP_RUNTIME_URL` and its checksum with the
-portable `libexec/php` layout.
+Laravel 8 uses its own writable `storage/` directory rather than honoring `LARAVEL_STORAGE_PATH`. Use `--copy` when the original folder must stay untouched.
 
-These PHP lines and Laravel 8 are legacy software for local compatibility work.
-Composer may reject an unlocked Laravel 8 installation because its packages have
-known security advisories. `--allow-insecure-dependencies` is an explicit option
-on `new` and `serve` to allow advisory-affected dependencies for that installation
-only; PHP platform checks and malware policies remain enabled. It does not edit
-the project's Composer policy. Without the option, normal Composer policy applies.
-It is generally unnecessary when installing an existing compatible lock file.
+</details>
 
-Laravel 8 does not honor the newer `LARAVEL_STORAGE_PATH` setting. Its logs,
-sessions and compiled views use the project's own `storage/` directory; it must
-be writable. Use `serve --copy` when the original folder must stay untouched.
+[Version precedence, runtime sources, and overrides →](docs/runtime.md)
 
-Each MySQL release gets a separate data directory. Changing versions does not
-upgrade, downgrade or import an existing database. Switching back reuses that
-version's data. Databases created by older LaraServe builds remain accessible
-when using their original MySQL 8.4.13 runtime.
+---
 
-## Private MySQL
+## 🗄️ MySQL & phpMyAdmin
+
+When an app selects `mysql` or `mariadb` in standard project settings, LaraServe starts its own **private MySQL database**. Each app gets generated credentials and persistent data. The database starts and stops with the web server and uses a private Unix socket, with TCP and MySQL X disabled.
 
 ```bash
-laraserve serve ./my-app --mysql
-laraserve serve ./my-app --mysql --migrate   # apply migrations added later
+laraserve serve ./my-app                     # detect the database setting
+laraserve serve ./my-app --mysql             # force private MySQL
+laraserve serve ./my-app --mysql=false       # keep an external connection
+laraserve serve ./my-app --phpmyadmin=false  # disable the database manager
 ```
 
-LaraServe automatically starts a private **MySQL 8.4** server (downloaded on first use) when the project
-selects `mysql` or `mariadb` through `.env` (`DB_CONNECTION` or `DB_URL`) or a
-standard `config/database.php` default. `--mysql` forces this for another database
-configuration; `--mysql=false` keeps the project's existing external connection.
-Detection reads these standard settings without booting PHP; custom dynamic
-configuration must use an explicit flag. Each app
-gets its own database, generated credentials and persistent data under
-`~/.laraserve/databases/<project-id>/` (or `$LARASERVE_HOME/databases/`).
-LaraServe injects the connection into Laravel without editing `.env`, initializes
-and migrates the database on first use, and stops MySQL when the web server
-stops. Later starts reuse the data. SQLite and MySQL retain separate data;
-this option does not copy an existing SQLite or external database.
+Open the **complete phpMyAdmin link printed in the terminal**. It signs in as the app's database-scoped user and stays bound to loopback, even when the app is exposed to the LAN. Each run gets a fresh token; database passwords are not included in the URL.
 
-Auto-detection uses LaraServe's separate private database; it does not connect to
-or import the database named in your existing `.env`. Use `--mysql=false` when
-you want that existing database.
+> ⚠️ Automatic MySQL mode creates a separate local database. It does **not** connect to or import the database in your `.env`. Use `--mysql=false` for that existing connection. A `mariadb` setting selects managed MySQL; it does not install MariaDB.
 
-The database accepts only a private Unix socket, with TCP and MySQL X disabled.
-It needs no Docker, global MySQL installation, administrator privileges or
-port 3306. The PHP runtime must include `pdo_mysql`. If MySQL exits unexpectedly,
-LaraServe stops serving the app and reports the database log path.
+Missing `libaio` and `libnuma` libraries are downloaded privately on Linux amd64, including support for Ubuntu 24. No manual `sudo apt install` or system symlink is needed for those libraries.
 
-### phpMyAdmin
+Each MySQL release has its own data directory. Changing versions does not migrate data; switching back reuses that release's database.
 
-When private MySQL is running, LaraServe also prints a **phpMyAdmin sign-in link**
-(usually `https://localhost:8444` or `http://localhost:8081`, with a private token).
-Open the complete printed link to sign in automatically as the app's
-database-scoped user. It can browse tables, run queries, and import/export data.
-It is bound to `127.0.0.1` even when the Laravel app uses `--host 0.0.0.0`.
-Each run creates a new sign-in link; database passwords are not placed in the URL.
+---
 
-Use `--phpmyadmin=false` to disable the management page. The PHP runtime needs
-`mysqli` and `mbstring` as well as `pdo_mysql`. Manager configuration and sessions
-are private to the run and removed on normal shutdown.
+## 🧳 Offline apps
 
-### Runtime downloads and cache
+Install the app's dependencies and build its frontend assets before packing:
 
-No runtime packaging step is needed. `serve` downloads PHP when needed. If MySQL
-is selected, it downloads MySQL and phpMyAdmin as well. Composer is downloaded
-only when creating an app or installing missing dependencies. Download progress
-is shown, and only complete, checksum-verified tools are added to the cache.
-All runtime downloads and temporary extraction files live under LaraServe's
-runtime cache. Database data remains separate under `databases/`.
+```bash
+laraserve pack ./my-app -o my-app.laraserve
+laraserve serve my-app.laraserve
+```
 
-Automatic PHP downloads support Linux amd64/arm64 and macOS arm64 (see version
-support above). Automatic MySQL downloads currently support Linux amd64
-(glibc 2.17+ for MySQL 8.0; glibc 2.28+ for 8.4). Other supported
-Unix platforms can supply `LARASERVE_MYSQL_DIR=/path/to/mysql`, or a platform
-archive using the mirror settings below. MySQL needs the OS support libraries
-`libaio` and `libnuma`. LaraServe first reuses local copies (including Ubuntu
-24.04's renamed `libaio1t64`). On Linux amd64, missing copies are downloaded
-automatically from the official Ubuntu archive, SHA-256 verified, and extracted
-privately. No `sudo`, `apt`, global package installation, or system symlinks are
-needed. The small support packages are cached under `runtimes/mysql-support/`,
-including their copyright notices, and reused offline and across MySQL versions.
-Package installation scripts are never run. Cached runtimes are repaired on later
-starts without deleting database data. Other missing libraries still produce an
-error naming the library and suggesting an OS package; the base system must
-provide a compatible glibc and C++ runtime. It does not install a global MySQL service. Windows automatic
-runtime installation is not implemented.
+A bundle contains the application, `vendor/`, and existing built assets. It does **not** contain runtime downloads or managed database data. The destination machine needs the selected tools cached before it can serve fully offline.
 
-Existing distributions can be supplied using `LARASERVE_FRANKENPHP`,
-`LARASERVE_MYSQL_DIR`, or `LARASERVE_PHPMYADMIN_DIR`. The phpMyAdmin directory must
-include `vendor/`. For download mirrors, set `LARASERVE_PHP_URL`,
-`LARASERVE_COMPOSER_URL`, `LARASERVE_MYSQL_URL`, `LARASERVE_PHP_RUNTIME_URL`, or
-`LARASERVE_PHPMYADMIN_URL`, `LARASERVE_LIBAIO_URL`, or
-`LARASERVE_LIBNUMA_URL` and
-the matching `LARASERVE_<TOOL>_SHA256`. Public mirrors require HTTPS; localhost
-mirrors also allow HTTP. MySQL/phpMyAdmin archives must have one enclosing
-directory and use `.tar.gz` or `.tar.xz`. `PHP_RUNTIME` archives use the portable
-PHP layout (`libexec/php`) without an enclosing directory; the runtime must report
-the selected exact version. Support-library mirrors use matching amd64 `.deb` packages containing
-`usr/lib/x86_64-linux-gnu/` (gzip/xz data archives). Tools are pinned to verified releases;
-LaraServe does not silently upgrade a cached tool on each run.
+Environment files are excluded by default, except `.env.example`. `--include-env` includes them deliberately; treat the resulting bundle as sensitive. SQLite files, Git metadata, `node_modules`, and generated storage caches/logs are excluded.
 
-`clean` preserves managed MySQL data; `uninstall` deletes it with the rest of
-LaraServe's home directory after confirmation. Back up data before uninstalling.
-After a hard crash, startup may report a `running.lock`: verify that no server
-uses that data directory before removing the lock. Initialization failures keep
-partial data for inspection rather than deleting it automatically.
+---
 
-## Host changes (all asked first, recorded, reversible)
+## 🔐 Local HTTPS & cleanup
 
-| Change | When | Undo |
+LaraServe binds the app to `127.0.0.1` by default. Host changes are prompted, recorded in its manifest, and reversible.
+
+| | Change | When | Undo |
+|---|---|---|---|
+| 🪪 | Trust the local CA in OS/browser stores | First HTTPS setup | `laraserve untrust` |
+| 🏠 | Add a managed hosts-file entry | A custom domain needs one | `laraserve clean <path>` |
+| 🔌 | Grant Linux low-port capability to the server binary | Accepting port 443 setup | Removed with the managed runtime |
+
+Use `--http` for the default localhost workflow without certificate or hosts setup. `--no-trust` and `--no-hosts` decline those changes individually. Without a terminal, prompts default to **no** unless `--yes` is supplied.
+
+> ⚠️ `clean` preserves managed MySQL data but removes private project state, **including its SQLite database**, and removes `vendor/` if LaraServe installed it. `uninstall` also deletes managed MySQL data. Back up data you need before cleanup.
+
+---
+
+## 📚 Documentation
+
+| | Guide | Contents |
 |---|---|---|
-| Local CA in OS trust store (+ NSS for Firefox/Chrome on Linux) | first HTTPS run | `laraserve untrust` |
-| `127.0.0.1 your.domain` in a marked block of the hosts file | `--domain x.test` | `laraserve clean` |
-| `setcap cap_net_bind_service` on the unpacked server binary (Linux) | accepting port 443 | removed with `~/.laraserve` |
+| ⚙️ | [Runtime & configuration](docs/runtime.md) | Version selection, all serve flags, data layout, mirrors, and runtime sources. |
+| 🔧 | [Troubleshooting & limits](docs/troubleshooting.md) | Firefox trust, missing libraries, migration failures, and platform gaps. |
 
-`--http` makes none of these. `--no-trust` / `--no-hosts` decline them (browser warning / `NAME.localhost` fallback).
-Without a terminal, prompts default to *no* unless `--yes` is given.
+## 🛠️ Development
 
-## Firefox HTTPS trust
+```bash
+make build  # build bin/laraserve
+make test   # run the Go test suite
+make dist   # cross-compile Linux and macOS clients
+```
 
-If Firefox asks for a certificate exception, fully close Firefox and run
-`laraserve trust`, then reopen it. The command reinstalls the CA even if it
-was previously recorded as installed, including existing Firefox NSS profiles
-on Linux. Install `libnss3-tools` (Debian/Ubuntu) or `nss-tools` (Fedora) if
-LaraServe reports that `certutil` is missing. Failed browser imports now show
-the affected profile path.
+Builds do not download or embed runtime executables. Local website source lives in [`website/dist/`](website/dist/).
 
-For a profile not discovered automatically, use Firefox Settings → Privacy &
-Security → Certificates → View Certificates → Authorities → Import. Select
-`~/.laraserve/ca/ca.pem` (or your custom `LARASERVE_HOME/ca/ca.pem`) and enable
-trust for identifying websites. Import the CA certificate, never `ca.key`.
-
-## Status / known gaps
-
-* Implemented & tested on Linux (serve, TLS chain + name constraints, hosts block, trust install/remove, pack/bundle,
-  clean/uninstall, managed MySQL). macOS and Windows code paths compile but are **untested**.
-* **Windows**: automatic runtime installation is not implemented.
-* `--sandbox` is not implemented (planned: Landlock / `sandbox-exec` / Job Objects).
-* Project PHP version switching supports Linux; macOS currently uses PHP 8.5; PHP 7.4 is Linux amd64 only.
-* Node assets are not built: `pack` expects `public/build` to exist already.
-* On macOS, Firefox ignores the system keychain unless `security.enterprise_roots.enabled` is set.
-* LAN devices must install `~/.laraserve/ca/ca.pem` themselves.
+No license file is currently included in this repository.
