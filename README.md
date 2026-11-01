@@ -274,3 +274,14 @@ For a profile not discovered automatically, use Firefox Settings → Privacy &
 Security → Certificates → View Certificates → Authorities → Import. Select
 `~/.laraserve/ca/ca.pem` (or your custom `LARASERVE_HOME/ca/ca.pem`) and enable
 trust for identifying websites. Import the CA certificate, never `ca.key`.
+
+## Status / known gaps
+
+* Implemented & tested on Linux (serve, TLS chain + name constraints, hosts block, trust install/remove, pack/bundle,
+  clean/uninstall, managed MySQL). macOS and Windows code paths compile but are **untested**.
+* **Windows**: automatic runtime installation is not implemented.
+* `--sandbox` is not implemented (planned: Landlock / `sandbox-exec` / Job Objects).
+* Project PHP version switching supports Linux; macOS currently uses PHP 8.5; PHP 7.4 is Linux amd64 only.
+* Node assets are not built: `pack` expects `public/build` to exist already.
+* On macOS, Firefox ignores the system keychain unless `security.enterprise_roots.enabled` is set.
+* LAN devices must install `~/.laraserve/ca/ca.pem` themselves.
