@@ -74,6 +74,24 @@ Flags may follow the project path: `laraserve serve ./app --http`.
 
 `new` accepts `--version`, `--php-version`, `--host-path`, and `--allow-insecure-dependencies`. `pack` accepts `-o` and `--include-env`. `uninstall` accepts `--yes` / `-y`.
 
+## 🎨 Terminal output
+
+Interactive terminals get colored status messages, aligned runtime details, and a
+startup summary with the app URL, project, framework requirement, PHP version,
+database, full phpMyAdmin sign-in URL when enabled, and server log path. Narrow
+terminals stack labels above values instead of truncating paths or links.
+
+Downloads show live progress with readable byte sizes, transfer speed, and ETA
+when the total size is known. Very narrow terminals use compact counters.
+Redirected output stays plain, with occasional progress lines instead of cursor
+updates. Errors go to stderr.
+
+Set `NO_COLOR` to disable colors, or use `TERM=dumb` / `CLICOLOR=0`. Set
+`FORCE_COLOR=1` or `CLICOLOR_FORCE=1` to request colors in captured output;
+`NO_COLOR` and the explicit disabling settings take precedence. These settings
+do not change whether a prompt accepts host changes: redirected input still
+requires `--yes`.
+
 ## 🗃️ Private state
 
 The default home is `~/.laraserve/`; set `LARASERVE_HOME` to choose another location.

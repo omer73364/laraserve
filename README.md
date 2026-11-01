@@ -53,6 +53,7 @@ laraserve serve my-app --http
 
 | | Feature | What it does |
 |---|---|---|
+| 🎨 | **Readable terminal UI** | Color-coded status, a startup summary, and download size/speed/ETA with plain output for pipes. |
 | 🐘 | **Project-aware PHP** | Reads Composer requirements and locked dependencies; supports explicit version pins. |
 | 🔒 | **HTTPS by default** | Serves through Caddy with a constrained local certificate authority. |
 | 🗄️ | **Private MySQL** | Detects MySQL settings and starts a separate, persistent database for the app. |
