@@ -249,3 +249,28 @@ LaraServe's home directory after confirmation. Back up data before uninstalling.
 After a hard crash, startup may report a `running.lock`: verify that no server
 uses that data directory before removing the lock. Initialization failures keep
 partial data for inspection rather than deleting it automatically.
+
+## Host changes (all asked first, recorded, reversible)
+
+| Change | When | Undo |
+|---|---|---|
+| Local CA in OS trust store (+ NSS for Firefox/Chrome on Linux) | first HTTPS run | `laraserve untrust` |
+| `127.0.0.1 your.domain` in a marked block of the hosts file | `--domain x.test` | `laraserve clean` |
+| `setcap cap_net_bind_service` on the unpacked server binary (Linux) | accepting port 443 | removed with `~/.laraserve` |
+
+`--http` makes none of these. `--no-trust` / `--no-hosts` decline them (browser warning / `NAME.localhost` fallback).
+Without a terminal, prompts default to *no* unless `--yes` is given.
+
+## Firefox HTTPS trust
+
+If Firefox asks for a certificate exception, fully close Firefox and run
+`laraserve trust`, then reopen it. The command reinstalls the CA even if it
+was previously recorded as installed, including existing Firefox NSS profiles
+on Linux. Install `libnss3-tools` (Debian/Ubuntu) or `nss-tools` (Fedora) if
+LaraServe reports that `certutil` is missing. Failed browser imports now show
+the affected profile path.
+
+For a profile not discovered automatically, use Firefox Settings → Privacy &
+Security → Certificates → View Certificates → Authorities → Import. Select
+`~/.laraserve/ca/ca.pem` (or your custom `LARASERVE_HOME/ca/ca.pem`) and enable
+trust for identifying websites. Import the CA certificate, never `ca.key`.
