@@ -161,3 +161,91 @@ Each MySQL release gets a separate data directory. Changing versions does not
 upgrade, downgrade or import an existing database. Switching back reuses that
 version's data. Databases created by older LaraServe builds remain accessible
 when using their original MySQL 8.4.13 runtime.
+
+## Private MySQL
+
+```bash
+laraserve serve ./my-app --mysql
+laraserve serve ./my-app --mysql --migrate   # apply migrations added later
+```
+
+LaraServe automatically starts a private **MySQL 8.4** server (downloaded on first use) when the project
+selects `mysql` or `mariadb` through `.env` (`DB_CONNECTION` or `DB_URL`) or a
+standard `config/database.php` default. `--mysql` forces this for another database
+configuration; `--mysql=false` keeps the project's existing external connection.
+Detection reads these standard settings without booting PHP; custom dynamic
+configuration must use an explicit flag. Each app
+gets its own database, generated credentials and persistent data under
+`~/.laraserve/databases/<project-id>/` (or `$LARASERVE_HOME/databases/`).
+LaraServe injects the connection into Laravel without editing `.env`, initializes
+and migrates the database on first use, and stops MySQL when the web server
+stops. Later starts reuse the data. SQLite and MySQL retain separate data;
+this option does not copy an existing SQLite or external database.
+
+Auto-detection uses LaraServe's separate private database; it does not connect to
+or import the database named in your existing `.env`. Use `--mysql=false` when
+you want that existing database.
+
+The database accepts only a private Unix socket, with TCP and MySQL X disabled.
+It needs no Docker, global MySQL installation, administrator privileges or
+port 3306. The PHP runtime must include `pdo_mysql`. If MySQL exits unexpectedly,
+LaraServe stops serving the app and reports the database log path.
+
+### phpMyAdmin
+
+When private MySQL is running, LaraServe also prints a **phpMyAdmin sign-in link**
+(usually `https://localhost:8444` or `http://localhost:8081`, with a private token).
+Open the complete printed link to sign in automatically as the app's
+database-scoped user. It can browse tables, run queries, and import/export data.
+It is bound to `127.0.0.1` even when the Laravel app uses `--host 0.0.0.0`.
+Each run creates a new sign-in link; database passwords are not placed in the URL.
+
+Use `--phpmyadmin=false` to disable the management page. The PHP runtime needs
+`mysqli` and `mbstring` as well as `pdo_mysql`. Manager configuration and sessions
+are private to the run and removed on normal shutdown.
+
+### Runtime downloads and cache
+
+No runtime packaging step is needed. `serve` downloads PHP when needed. If MySQL
+is selected, it downloads MySQL and phpMyAdmin as well. Composer is downloaded
+only when creating an app or installing missing dependencies. Download progress
+is shown, and only complete, checksum-verified tools are added to the cache.
+All runtime downloads and temporary extraction files live under LaraServe's
+runtime cache. Database data remains separate under `databases/`.
+
+Automatic PHP downloads support Linux amd64/arm64 and macOS arm64 (see version
+support above). Automatic MySQL downloads currently support Linux amd64
+(glibc 2.17+ for MySQL 8.0; glibc 2.28+ for 8.4). Other supported
+Unix platforms can supply `LARASERVE_MYSQL_DIR=/path/to/mysql`, or a platform
+archive using the mirror settings below. MySQL needs the OS support libraries
+`libaio` and `libnuma`. LaraServe first reuses local copies (including Ubuntu
+24.04's renamed `libaio1t64`). On Linux amd64, missing copies are downloaded
+automatically from the official Ubuntu archive, SHA-256 verified, and extracted
+privately. No `sudo`, `apt`, global package installation, or system symlinks are
+needed. The small support packages are cached under `runtimes/mysql-support/`,
+including their copyright notices, and reused offline and across MySQL versions.
+Package installation scripts are never run. Cached runtimes are repaired on later
+starts without deleting database data. Other missing libraries still produce an
+error naming the library and suggesting an OS package; the base system must
+provide a compatible glibc and C++ runtime. It does not install a global MySQL service. Windows automatic
+runtime installation is not implemented.
+
+Existing distributions can be supplied using `LARASERVE_FRANKENPHP`,
+`LARASERVE_MYSQL_DIR`, or `LARASERVE_PHPMYADMIN_DIR`. The phpMyAdmin directory must
+include `vendor/`. For download mirrors, set `LARASERVE_PHP_URL`,
+`LARASERVE_COMPOSER_URL`, `LARASERVE_MYSQL_URL`, `LARASERVE_PHP_RUNTIME_URL`, or
+`LARASERVE_PHPMYADMIN_URL`, `LARASERVE_LIBAIO_URL`, or
+`LARASERVE_LIBNUMA_URL` and
+the matching `LARASERVE_<TOOL>_SHA256`. Public mirrors require HTTPS; localhost
+mirrors also allow HTTP. MySQL/phpMyAdmin archives must have one enclosing
+directory and use `.tar.gz` or `.tar.xz`. `PHP_RUNTIME` archives use the portable
+PHP layout (`libexec/php`) without an enclosing directory; the runtime must report
+the selected exact version. Support-library mirrors use matching amd64 `.deb` packages containing
+`usr/lib/x86_64-linux-gnu/` (gzip/xz data archives). Tools are pinned to verified releases;
+LaraServe does not silently upgrade a cached tool on each run.
+
+`clean` preserves managed MySQL data; `uninstall` deletes it with the rest of
+LaraServe's home directory after confirmation. Back up data before uninstalling.
+After a hard crash, startup may report a `running.lock`: verify that no server
+uses that data directory before removing the lock. Initialization failures keep
+partial data for inspection rather than deleting it automatically.
