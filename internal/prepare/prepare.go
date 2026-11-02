@@ -99,7 +99,7 @@ func artisanContext(ctx context.Context, php, root string, env []string, args ..
 	cmd := process.PHPContext(ctx, php, full...)
 	cmd.Dir, cmd.Env = root, env
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	return process.RunOwned(cmd)
 }
 
 // EnsureMigrations runs only when explicitly requested. Fresh databases and
@@ -122,8 +122,11 @@ func (s *State) EnsureMigrationsContext(ctx context.Context, php, root string, e
 
 // ComposerInstall runs `composer install` (needs network unless cached).
 func ComposerInstall(php, composerPhar, root string, env []string, allowInsecure ...bool) error {
+	return ComposerInstallContext(context.Background(), php, composerPhar, root, env, allowInsecure...)
+}
+func ComposerInstallContext(ctx context.Context, php, composerPhar, root string, env []string, allowInsecure ...bool) error {
 	env = composerPolicyEnv(env, allowInsecure)
-	cmd := process.PHP(php, composerPhar, "install",
+	cmd := process.PHPContext(ctx, php, composerPhar, "install",
 		"--no-interaction", "--prefer-dist", "--no-progress")
 	cmd.Dir = root
 	return runComposer(cmd, php, env)
@@ -137,7 +140,7 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 		cmd.Env = append([]string{}, env...)
 		cmd.Env = append(cmd.Env, "PHP_BINARY="+php)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		return cmd.Run()
+		return process.RunOwned(cmd)
 	}
 	php, err := filepath.Abs(php)
 	if err != nil {
@@ -175,7 +178,7 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 	}
 	cmd.Env = append(cmd.Env, "PHP_BINARY="+launcher, "PATH="+dir+string(os.PathListSeparator)+path)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	return process.RunOwned(cmd)
 }
 
 // ComposerCreateProject scaffolds an app using the cached PHP and Composer.

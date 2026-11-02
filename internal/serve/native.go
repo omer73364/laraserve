@@ -59,14 +59,14 @@ func startNative(ctx context.Context, c Config, root string, log io.Writer, stop
 	cmd.Stderr = log
 	cmd.Cancel = func() error { return process.Stop(cmd) }
 	cmd.WaitDelay = 5 * time.Second
-	if err = cmd.Start(); err != nil {
+	if err = process.StartOwned(cmd); err != nil {
 		os.Remove(path)
 		return 0, nil, err
 	}
 	done := make(chan struct{})
 	var exitErr error
 	go func() {
-		exitErr = cmd.Wait()
+		exitErr = process.WaitOwned(cmd)
 		close(done)
 		if ctx.Err() == nil {
 			stop()
