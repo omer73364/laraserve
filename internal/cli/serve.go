@@ -235,22 +235,24 @@ func cmdServe(args []string) error {
 		ui.OK("MySQL %s ready", selectedMySQL)
 	}
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
-	if db != nil {
-		// MySQL migrations have their own marker; switching database engines
-		// must not reuse SQLite's successful setup state.
+	if db != nil && *migrate {
 		mysqlState := &prepare.State{Dir: db.Dir}
-		ui.Info("Checking MySQL migration setup")
+		ui.Info("Applying MySQL migrations")
 		if err := mysqlState.EnsureMigrationsContext(cfg.Context, rt.PHP, root, cfg.Env, *migrate); err != nil {
 			return err
 		}
-	} else if cfg.AppEnv["DB_CONNECTION"] == "sqlite" {
-		ui.Info("Checking SQLite migration setup")
+	} else if cfg.AppEnv["DB_CONNECTION"] == "sqlite" && *migrate {
+		ui.Info("Applying SQLite migrations")
 		if err := st.EnsureMigrations(rt.PHP, root, cfg.Env, *migrate); err != nil {
 			return err
 		}
 		ui.OK("SQLite ready")
-	} else {
-		ui.OK("Using project's database connection (%s)", connection)
+	} else if db == nil {
+		if cfg.AppEnv["DB_CONNECTION"] == "sqlite" {
+			ui.OK("SQLite ready (migrations skipped)")
+		} else {
+			ui.OK("Using project's database connection (%s)", connection)
+		}
 	}
 	var admin *phpmyadmin.Workspace
 	if db != nil && *adminF {

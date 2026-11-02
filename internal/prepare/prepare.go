@@ -101,28 +101,22 @@ func artisanContext(ctx context.Context, php, root string, env []string, args ..
 	return cmd.Run()
 }
 
-// EnsureMigrations retries incomplete database setup, including databases created
-// by older versions that only remembered whether the database file was new.
-func (s *State) EnsureMigrations(php, root string, env []string, force bool) error {
-	return s.EnsureMigrationsContext(context.Background(), php, root, env, force)
+// EnsureMigrations runs only when explicitly requested. Fresh databases and
+// failures from an earlier run must never trigger schema changes on startup.
+func (s *State) EnsureMigrations(php, root string, env []string, requested bool) error {
+	return s.EnsureMigrationsContext(context.Background(), php, root, env, requested)
 }
 
-// EnsureMigrationsContext cancels migrations when a managed database stops.
-func (s *State) EnsureMigrationsContext(ctx context.Context, php, root string, env []string, force bool) error {
-	marker := filepath.Join(s.Dir, "migrations.ready")
-	if _, err := os.Stat(marker); err == nil && !s.Fresh && !force {
+// EnsureMigrationsContext cancels an explicitly requested migration if its
+// managed database stops.
+func (s *State) EnsureMigrationsContext(ctx context.Context, php, root string, env []string, requested bool) error {
+	if !requested {
 		return nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	// A failed forced run must also be retried on the next startup.
-	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
-		return err
 	}
 	if err := artisanContext(ctx, php, root, env, "migrate", "--force", "--no-interaction"); err != nil {
-		return fmt.Errorf("database migrations failed: %w; fix the migration error and restart laraserve", err)
+		return fmt.Errorf("database migrations failed: %w; fix the migration error and rerun with --migrate", err)
 	}
-	return os.WriteFile(marker, []byte("ready\n"), 0o600)
+	return nil
 }
 
 // ComposerInstall runs `composer install` (needs network unless cached).
@@ -184,12 +178,39 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 func ComposerCreateProject(php, composerPhar, root, version string, env []string, allowInsecure ...bool) error {
 	env = composerPolicyEnv(env, allowInsecure)
 	args := []string{"php-cli", composerPhar, "create-project",
-		"--no-interaction", "--prefer-dist", "--no-progress", "--", "laravel/laravel", root}
+		"--no-interaction", "--prefer-dist", "--no-progress", "--no-scripts", "--", "laravel/laravel", root}
 	if version != "" {
 		args = append(args, version)
 	}
 	cmd := exec.Command(php, args...)
-	return runComposer(cmd, php, env)
+	if err := runComposer(cmd, php, env); err != nil {
+		return err
+	}
+	// Laravel's post-create scripts may migrate automatically. Skip those hooks,
+	// but retain the standard environment file setup without changing the schema.
+	target := filepath.Join(root, ".env")
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	example, err := os.ReadFile(filepath.Join(root, ".env.example"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(example)
+	closeErr := f.Close()
+	if err != nil {
+		return err
+	}
+	return closeErr
 }
 
 // The opt-in affects known advisory blocking only, not malware policies or PHP
