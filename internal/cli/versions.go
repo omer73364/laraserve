@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"laraserve/internal/detect"
-	"laraserve/internal/paths"
+	"laraserve/internal/projects"
 	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 	"laraserve/internal/versions"
@@ -33,7 +33,15 @@ func cmdVersions(args []string) error {
 	if err != nil {
 		return err
 	}
-	locked, err := versions.ReadLock(filepath.Join(c.home.Projects(), paths.ProjectID(root), "runtime-versions.json"))
+	root, err = projects.Canonical(root)
+	if err != nil {
+		return err
+	}
+	id, err := projectStateID(c.man, root, false)
+	if err != nil {
+		return err
+	}
+	locked, err := versions.ReadLock(filepath.Join(c.home.Projects(), id, "runtime-versions.json"))
 	if err != nil {
 		return err
 	}

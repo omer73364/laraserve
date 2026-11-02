@@ -2,9 +2,12 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"laraserve/internal/filelock"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"laraserve/internal/manifest"
@@ -18,6 +21,11 @@ const usage = `laraserve %s - serve any Laravel app over HTTPS, with no PHP/Comp
 Usage:
   laraserve new <path> [--version CONSTRAINT] [--php-version V] [--host-path]
   laraserve serve [path|bundle.laraserve] [flags]
+  laraserve projects           list registered projects and their status
+  laraserve start [path|name|ID] [serve flags]   start in the background
+  laraserve stop [path|name|ID]                 stop its current owner
+  laraserve restart [path|name|ID] [serve flags]
+  laraserve status [path|name|ID]
   laraserve pack  [path] [-o app.laraserve] [--include-env]
   laraserve trust | untrust      install / remove the local CA in the OS trust store
   laraserve clean [path]         remove vendor/ (if laraserve made it), state, hosts entries
@@ -57,12 +65,36 @@ func Run(args []string) int {
 	}
 	var err error
 	switch args[0] {
+	case "trust", "untrust", "clean", "uninstall":
+		home, e := paths.New()
+		if e != nil {
+			ui.Err("%v", e)
+			return 1
+		}
+		release, e := filelock.Acquire(context.Background(), filepath.Join(home.Root, "startup.lock"))
+		if e != nil {
+			ui.Err("%v", e)
+			return 1
+		}
+		defer release()
+	}
+	switch args[0] {
 	case "new":
 		err = cmdNew(args[1:])
 	case "versions":
 		err = cmdVersions(args[1:])
-	case "serve":
+	case "serve", "__background-serve":
 		err = cmdServe(args[1:])
+	case "projects", "list":
+		err = cmdProjects(args[1:])
+	case "start":
+		err = cmdStart(args[1:], false)
+	case "restart":
+		err = cmdStart(args[1:], true)
+	case "stop":
+		err = cmdStop(args[1:])
+	case "status":
+		err = cmdStatus(args[1:])
 	case "pack":
 		err = cmdPack(args[1:])
 	case "trust":

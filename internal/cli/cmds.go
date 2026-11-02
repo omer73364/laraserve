@@ -10,6 +10,8 @@ import (
 	"laraserve/internal/hosts"
 	"laraserve/internal/pack"
 	"laraserve/internal/paths"
+	"laraserve/internal/projects"
+	"laraserve/internal/supervisor"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
 )
@@ -99,6 +101,11 @@ func cmdClean(args []string) error {
 		target = fs.Arg(0)
 	}
 	abs, _ := filepath.Abs(target)
+	if p, err := projects.New(c.home.Root).Find(abs); err == nil {
+		if err := requireStopped(c.home.Root, p.ID); err != nil {
+			return err
+		}
+	}
 	found := false
 	for id, p := range c.man.Projects {
 		ws := filepath.Join(c.home.Workspaces(), paths.ProjectID(abs))
@@ -162,6 +169,24 @@ func cmdUninstall(args []string) error {
 	if err != nil {
 		return err
 	}
+	owners, err := supervisor.States(c.home.Root)
+	if err != nil {
+		return err
+	}
+	for _, state := range owners {
+		if err := requireStopped(c.home.Root, state.ID); err != nil {
+			return err
+		}
+	}
+	registered, err := projects.New(c.home.Root).List()
+	if err != nil {
+		return err
+	}
+	for _, p := range registered {
+		if err := requireStopped(c.home.Root, p.ID); err != nil {
+			return err
+		}
+	}
 	if !ui.Confirm(fmt.Sprintf("Remove everything laraserve created (including %s)?", c.home.Root)) {
 		return nil
 	}
@@ -184,5 +209,17 @@ func cmdUninstall(args []string) error {
 		return err
 	}
 	ui.OK("Removed %s. laraserve left nothing behind.", c.home.Root)
+	return nil
+}
+
+func requireStopped(home, id string) error {
+	state, err := supervisor.Status(home, id)
+	if err != nil {
+		return err
+	}
+	switch state.Status {
+	case "starting", "running", "stopping", "unresponsive":
+		return fmt.Errorf("stop project %s before removing its files", id)
+	}
 	return nil
 }

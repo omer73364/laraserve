@@ -20,6 +20,10 @@ func New() (*Home, error) {
 		}
 		root = filepath.Join(h, ".laraserve")
 	}
+	root, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, err
 	}
