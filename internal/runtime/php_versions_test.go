@@ -152,3 +152,17 @@ func TestDebZstdDataAndCrossPackageDocumentation(t *testing.T) {
 		t.Fatal("cross-package doc link retained")
 	}
 }
+
+func TestPHPVersionCheckIgnoresStderrWarnings(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX fixture")
+	}
+	dir := t.TempDir()
+	php := filepath.Join(dir, "php")
+	if err := os.WriteFile(php, []byte("#!/bin/sh\nprintf 'diagnostic warning\\n' >&2\nprintf '8.5.12'\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyPHP(&Runtime{PHP: php, Dir: dir, INI: dir}, "8.5.12"); err != nil {
+		t.Fatal(err)
+	}
+}

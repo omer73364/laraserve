@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"laraserve/internal/process"
 	"os"
+	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -129,8 +130,11 @@ func EnsurePHP(root, version string) (*Runtime, error) {
 func verifyPHP(rt *Runtime, want string) error {
 	cmd := process.PHP(rt.PHP, "-r", "echo PHP_VERSION;")
 	cmd.Env = []string{"PHPRC=" + rt.INI, "PHP_INI_SCAN_DIR=", "PATH=" + rt.Dir}
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	if err != nil {
+		if exit, ok := err.(*exec.ExitError); ok {
+			out = append(out, exit.Stderr...)
+		}
 		return fmt.Errorf("PHP %s runtime failed: %w: %s", want, err, out)
 	}
 	if strings.TrimSpace(string(out)) != want {
