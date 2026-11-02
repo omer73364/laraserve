@@ -44,7 +44,7 @@ func Install(ca *certs.CA) (*manifest.CAEntry, error) {
 		}
 	case "windows":
 		e.Method = "windows"
-		if err := run(false, "certutil", "-user", "-addstore", "Root", ca.PEMPath); err != nil {
+		if err := run(false, windowsCertutil(), "-user", "-addstore", "Root", ca.PEMPath); err != nil {
 			return nil, fmt.Errorf("certutil: %w", err)
 		}
 	case "linux":
@@ -77,7 +77,7 @@ func Remove(e *manifest.CAEntry) error {
 		_ = run(false, "security", "remove-trusted-cert", "-d", "-c", certs.CAName) // best effort
 		errs = append(errs, run(false, "security", "delete-certificate", "-Z", e.SHA1))
 	case "windows":
-		errs = append(errs, run(false, "certutil", "-user", "-delstore", "Root", certs.CAName))
+		errs = append(errs, run(false, windowsCertutil(), "-user", "-delstore", "Root", e.SHA1))
 	case "linux":
 		if e.Location != "" {
 			errs = append(errs, run(true, "rm", "-f", e.Location))
@@ -182,4 +182,8 @@ func nssTool() (string, error) {
 	}
 	ui.Info("Preparing private browser certificate tools")
 	return ensureNSSRuntime(home.Runtimes())
+}
+
+func windowsCertutil() string {
+	return filepath.Join(os.Getenv("SystemRoot"), "System32", "certutil.exe")
 }
