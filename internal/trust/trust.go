@@ -10,9 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strings"
 
 	"laraserve/internal/certs"
 	"laraserve/internal/manifest"
+	"laraserve/internal/paths"
+	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 )
 
@@ -82,8 +85,23 @@ func Remove(e *manifest.CAEntry) error {
 				errs = append(errs, run(true, e.Update[0], e.Update[1:]...))
 			}
 		}
-		for _, db := range e.NSSDBs {
-			_ = run(false, "certutil", "-d", "sql:"+db, "-D", "-n", certs.CAName)
+		if len(e.NSSDBs) > 0 {
+			tool, err := nssTool()
+			if err != nil {
+				errs = append(errs, fmt.Errorf("browser certificate removal needs NSS tools: %w", err))
+			} else {
+				for _, db := range e.NSSDBs {
+					if _, err := os.Stat(db); os.IsNotExist(err) {
+						continue
+					}
+					cmd := exec.Command(tool, "-d", "sql:"+db, "-D", "-n", certs.CAName)
+					cmd.Stdin = os.Stdin
+					out, err := cmd.CombinedOutput()
+					if err != nil && !strings.Contains(string(out), "SEC_ERROR_UNKNOWN_CERT") {
+						errs = append(errs, fmt.Errorf("remove browser CA from %s: %w: %s", db, err, out))
+					}
+				}
+			}
 		}
 	}
 	return errors.Join(errs...)
@@ -109,11 +127,6 @@ func linuxDistro() (*distro, error) {
 // installNSS imports the CA into Chrome/Chromium and Firefox databases
 // (user-level, no root). Returns the databases that were modified.
 func installNSS(pemPath string) []string {
-	if !have("certutil") {
-		ui.Warn("`certutil` not found: Firefox and Chrome use their own store on Linux.")
-		ui.Info("Install libnss3-tools (Debian/Ubuntu) or nss-tools (Fedora) and run `laraserve trust`.")
-		return nil
-	}
 	home, _ := os.UserHomeDir()
 	var dbs []string
 	for _, p := range []string{
@@ -134,19 +147,39 @@ func installNSS(pemPath string) []string {
 			dbs = append(dbs, filepath.Dir(f))
 		}
 	}
+	if len(dbs) == 0 {
+		ui.Warn("No browser certificate databases found. Create a Firefox profile, then run `laraserve trust` again.")
+		return nil
+	}
+	tool, err := nssTool()
+	if err != nil {
+		ui.Warn("Browser trust setup could not obtain NSS tools: %v. Retry `laraserve trust` when online, or install your distribution's libnss3-tools/nss-tools.", err)
+		return nil
+	}
 	var done []string
 	for _, db := range dbs {
-		if err := run(false, "certutil", "-d", "sql:"+db, "-A", "-t", "C,,", "-n", certs.CAName, "-i", pemPath); err == nil {
+		if err := run(false, tool, "-d", "sql:"+db, "-A", "-t", "C,,", "-n", certs.CAName, "-i", pemPath); err == nil {
 			done = append(done, db)
 		} else {
 			ui.Warn("Browser CA import failed for %s: %v. Close the browser and retry `laraserve trust`.", db, err)
 		}
 	}
-	if len(dbs) == 0 {
-		ui.Warn("No browser certificate databases found. Create a Firefox profile, then run `laraserve trust` again.")
-	}
 	if len(done) > 0 {
 		ui.OK("Local CA imported into %d browser certificate database(s)", len(done))
 	}
 	return done
+}
+
+var ensureNSSRuntime = runtime.EnsureNSS
+
+func nssTool() (string, error) {
+	if tool, err := exec.LookPath("certutil"); err == nil {
+		return tool, nil
+	}
+	home, err := paths.New()
+	if err != nil {
+		return "", err
+	}
+	ui.Info("Preparing private browser certificate tools")
+	return ensureNSSRuntime(home.Runtimes())
 }
