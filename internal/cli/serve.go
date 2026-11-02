@@ -14,6 +14,7 @@ import (
 	goruntime "runtime"
 	"strings"
 	"syscall"
+	"time"
 
 	"laraserve/internal/certs"
 	"laraserve/internal/detect"
@@ -473,6 +474,17 @@ func choosePort(rt *runtime.Runtime, host string, explicit int, https, hasDomain
 
 // privilegedPortOK decides whether port 443 can be used without running as root.
 func privilegedPortOK(rt *runtime.Runtime, host string) bool {
+	probeHost := host
+	if host == "0.0.0.0" {
+		probeHost = "127.0.0.1"
+	} else if host == "::" {
+		probeHost = "::1"
+	}
+	if conn, err := net.DialTimeout("tcp", net.JoinHostPort(probeHost, "443"), 200*time.Millisecond); err == nil {
+		conn.Close()
+		ui.Info("Port 443 is in use; choosing an alternate HTTPS port")
+		return false
+	}
 	if goruntime.GOOS != "linux" {
 		return serve.CanBind(host, 443)
 	}
@@ -493,8 +505,8 @@ func privilegedPortOK(rt *runtime.Runtime, host string) bool {
 		return true
 	}
 	// The probe runs as the current user, so EACCES is expected after setcap; only
-	// "address in use" rules 443 out.
-	return !errors.Is(err, syscall.EADDRINUSE)
+	// permission errors are the only failures the server capability can resolve.
+	return errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)
 }
 
 func linuxLowPortAllowed(bin string) bool {
