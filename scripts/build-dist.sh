@@ -8,8 +8,10 @@ for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; d
   os=${target%/*}; arch=${target#*/}
   suffix=""
   if [ "$os" = windows ]; then suffix=".exe"; fi
-  GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -buildvcs=false \
+  GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -trimpath -buildvcs=false \
     -ldflags "-s -w -X laraserve/internal/runtime.Version=$VERSION" \
     -o "dist/laraserve-$os-$arch$suffix" .
   echo "built dist/laraserve-$os-$arch$suffix"
 done
+
+go run ./scripts/release --dir dist

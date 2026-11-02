@@ -1,7 +1,7 @@
 VERSION ?= 0.1.0
 LDFLAGS := -s -w -X laraserve/internal/runtime.Version=$(VERSION)
 
-.PHONY: build test dist clean
+.PHONY: build test check dist release clean
 
 # No PHP, Composer, MySQL or phpMyAdmin files are embedded or downloaded here.
 build:
@@ -10,8 +10,15 @@ build:
 test:
 	go test ./...
 
+check:
+	go test ./...
+	go vet ./...
+
 dist:
 	VERSION=$(VERSION) ./scripts/build-dist.sh
+
+release: dist
+	go run ./scripts/release --dir dist --version "$(VERSION)" --archives
 
 clean:
 	rm -rf bin dist
