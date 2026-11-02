@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -78,4 +79,37 @@ func TestRealPrivateNSSBrowserTrust(t *testing.T) {
 		t.Fatalf("offline reuse: %s %v", again, err)
 	}
 	t.Log("Private certutil initialized an NSS database, imported/listed/removed a CA, and reused its cache offline without host tools")
+}
+
+func TestBrokenCachedNSSLoaderIsRebuilt(t *testing.T) {
+	if goruntime.GOOS != "linux" {
+		t.Skip("Linux NSS loader")
+	}
+	root := t.TempDir()
+	cached := filepath.Join(root, "nss-fixture")
+	write := func(dir, script string) error {
+		for _, name := range []string{"bin/certutil", "usr/bin/certutil", "usr/lib/x86_64-linux-gnu/libnss3.so", "usr/lib/x86_64-linux-gnu/libnspr4.so"} {
+			full := filepath.Join(dir, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+				return err
+			}
+			content := []byte("fixture")
+			if name == "bin/certutil" {
+				content = []byte(script)
+			}
+			if err := os.WriteFile(full, content, 0700); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if err := write(cached, "#!/bin/sh\nexit 1\n"); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(cached, ".ready"), []byte("ready"), 0600)
+	rebuilt := false
+	_, err := installCache(root, "nss-fixture", validateNSS, func(dir string) error { rebuilt = true; return write(dir, "#!/bin/sh\nprintf '%s\\n' '-A -L'\n") })
+	if err != nil || !rebuilt {
+		t.Fatal("broken NSS cache was not repaired", err)
+	}
 }

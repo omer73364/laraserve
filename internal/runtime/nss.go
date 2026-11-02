@@ -38,14 +38,7 @@ func EnsureNSS(root string) (string, error) {
 	encoded, _ := json.Marshal(packages)
 	digest := sha256.Sum256(encoded)
 	key := "nss-linux-amd64-" + fmt.Sprintf("%x", digest[:10])
-	dir, err := installCache(root, key, func(dir string) error {
-		for _, name := range []string{"bin/certutil", "usr/bin/certutil", "usr/lib/x86_64-linux-gnu/libnss3.so", "usr/lib/x86_64-linux-gnu/libnspr4.so"} {
-			if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-				return err
-			}
-		}
-		return executable(filepath.Join(dir, "usr/bin/certutil"))
-	}, func(dir string) error {
+	dir, err := installCache(root, key, validateNSS, func(dir string) error {
 		for _, p := range packages {
 			archive := filepath.Join(dir, ".package.deb")
 			if err := downloadFile(p.Source, archive, "Browser trust: "+p.Name); err != nil {
@@ -71,10 +64,24 @@ exec "$root/usr/bin/certutil" "$@"
 	if err != nil {
 		return "", err
 	}
+	return filepath.Join(dir, "bin", "certutil"), nil
+}
+
+// Validate the loader before accepting a ready cache, so a broken cached
+// helper is rebuilt rather than producing the same missing-library error.
+func validateNSS(dir string) error {
+	for _, name := range []string{"bin/certutil", "usr/bin/certutil", "usr/lib/x86_64-linux-gnu/libnss3.so", "usr/lib/x86_64-linux-gnu/libnspr4.so"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+			return err
+		}
+	}
+	if err := executable(filepath.Join(dir, "usr/bin/certutil")); err != nil {
+		return err
+	}
 	tool := filepath.Join(dir, "bin", "certutil")
 	out, err := exec.Command(tool, "-H").CombinedOutput()
 	if !strings.Contains(string(out), "-A") || !strings.Contains(string(out), "-L") {
-		return "", fmt.Errorf("private NSS tools could not run: %v: %s", err, out)
+		return fmt.Errorf("private NSS tools could not run: %v: %s", err, out)
 	}
-	return tool, nil
+	return nil
 }
