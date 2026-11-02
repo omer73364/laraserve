@@ -22,11 +22,11 @@ type mysqlSupportLibrary struct {
 var mysqlSupportLibraries = []mysqlSupportLibrary{
 	{"libaio.so.1", "LIBAIO", "0.3.112-5", downloadSource{
 		"https://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-5_amd64.deb",
-		"0e50c3258f03d6eee671d7106120b450a6f3a546fe343d57bbfe33257d4e3b48",
+		"publisher",
 	}},
 	{"libnuma.so.1", "LIBNUMA", "2.0.12-1", downloadSource{
 		"https://archive.ubuntu.com/ubuntu/pool/main/n/numactl/libnuma1_2.0.12-1_amd64.deb",
-		"0b1edf08cf9befecd21fe94e298ac25e476f87fd876ddd4adf42ef713449e637",
+		"publisher",
 	}},
 }
 

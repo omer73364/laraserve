@@ -1,54 +1,54 @@
 {
   "8.5.12/arm64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.5.12/php-8.5.12-linux-aarch64.tar.gz",
-    "SHA256": "2d77f67118661e737e8d01ca3fc148bc83ccd56ae84284c79d6119ebef0d9032"
+    "SHA256": "publisher"
   },
   "8.5.12/amd64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.5.12/php-8.5.12-linux-x86_64.tar.gz",
-    "SHA256": "21ebbd21859413ac2b733a2aa0c44227cf8b488aed345c9573c39a8cee1133db"
+    "SHA256": "publisher"
   },
   "8.4.27/arm64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.4.27/php-8.4.27-linux-aarch64.tar.gz",
-    "SHA256": "fdc7a25840166f0ec38dc6fc77eeb434008ef5573b5010c79424c70cf4c26d55"
+    "SHA256": "publisher"
   },
   "8.4.27/amd64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.4.27/php-8.4.27-linux-x86_64.tar.gz",
-    "SHA256": "ec5b9e79001f749c08ea6f0c9ccd27fb816a74b6c94b1f92bd5e286ad1c2376b"
+    "SHA256": "publisher"
   },
   "8.3.36/arm64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.3.36/php-8.3.36-linux-aarch64.tar.gz",
-    "SHA256": "d937d2225c18493e5f8be6e640f24b47ea5db0f89b207c7020321b7db794c03a"
+    "SHA256": "publisher"
   },
   "8.3.36/amd64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.3.36/php-8.3.36-linux-x86_64.tar.gz",
-    "SHA256": "ea8aa36dff730a99d75654681081d3154c01b70c82ae756cd5365c13f7b06f2a"
+    "SHA256": "publisher"
   },
   "8.2.35/arm64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.2.35/php-8.2.35-linux-aarch64.tar.gz",
-    "SHA256": "b59cc213f357658947c9e3f4040a9071c444da364628c98b9192e0afe8d74d48"
+    "SHA256": "publisher"
   },
   "8.2.35/amd64": {
     "URL": "https://github.com/nunomaduro/static-php-builds/releases/download/v8.2.35/php-8.2.35-linux-x86_64.tar.gz",
-    "SHA256": "51efbe391f7d667fce1dbfc5b4ec6eb6c6b6356edd681d78425d936f9587e73c"
+    "SHA256": "publisher"
   },
   "8.0.30/amd64": {
     "URL": "https://github.com/heera/php-binaries/releases/download/php-8.0/php-8.0.30-cli-linux-x86_64.tar.gz",
-    "SHA256": "805fadfc7eaa97541344d53a5ef2912d7be1e6bdeab753fddc2ce0c63b40c1a5"
+    "SHA256": "publisher"
   },
   "8.0.30/arm64": {
     "URL": "https://github.com/heera/php-binaries/releases/download/php-8.0/php-8.0.30-cli-linux-aarch64.tar.gz",
-    "SHA256": "2c3fbc72d878862cf3b3d18849d4ab2ca7c02d38821d880eb8fb74a2e6f5c1d3"
+    "SHA256": "publisher"
   },
   "8.1.34/amd64": {
     "URL": "https://github.com/heera/php-binaries/releases/download/php-8.1/php-8.1.34-cli-linux-x86_64.tar.gz",
-    "SHA256": "e2932192836731163bf8d16d634f4bdda76c422ceb40c2c4d7c55ae63680f1aa"
+    "SHA256": "publisher"
   },
   "8.1.34/arm64": {
     "URL": "https://github.com/heera/php-binaries/releases/download/php-8.1/php-8.1.34-cli-linux-aarch64.tar.gz",
-    "SHA256": "fcaad73ceadad5afe6820ab3510de4452dadc875b3a295bf22dc2678845922b2"
+    "SHA256": "publisher"
   },
   "7.4.33/amd64": {
     "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-cli_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-    "SHA256": "d30678a0aa5768ffbbdfea74f02b825139ee60e2744b6b9887248a782485fc89"
+    "SHA256": "publisher"
   }
 }

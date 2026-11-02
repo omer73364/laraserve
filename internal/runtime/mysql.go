@@ -34,7 +34,7 @@ func EnsureMySQLVersion(runtimesDir, version string) (string, error) {
 	if (goruntime.GOOS != "linux" || goruntime.GOARCH != "amd64") && os.Getenv("LARASERVE_MYSQL_URL") == "" {
 		return "", fmt.Errorf("automatic MySQL download is currently available for Linux amd64; set LARASERVE_MYSQL_DIR or LARASERVE_MYSQL_URL and LARASERVE_MYSQL_SHA256 for this platform")
 	}
-	sources := map[string]downloadSource{"8.0.46": {"https://cdn.mysql.com/Downloads/MySQL-8.0/mysql-8.0.46-linux-glibc2.17-x86_64-minimal.tar.xz", "e2777d490fcaadc5a4be06db89b6935c78909bd9c3382af859ab284af0c950b0"}, "8.4.13": {"https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-linux-glibc2.28-x86_64-minimal.tar.xz", "5dfbb764f731df40ef9e4f5d69aed32bdac8ba1af20bd96b7d40a942d83d4ed2"}}
+	sources := map[string]downloadSource{"8.0.46": {"https://cdn.mysql.com/Downloads/MySQL-8.0/mysql-8.0.46-linux-glibc2.17-x86_64-minimal.tar.xz", "publisher"}, "8.4.13": {"https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-linux-glibc2.28-x86_64-minimal.tar.xz", "publisher"}}
 	selected, ok := sources[version]
 	if !ok {
 		return "", fmt.Errorf("no MySQL download for %s", version)

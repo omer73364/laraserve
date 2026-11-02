@@ -35,9 +35,9 @@ func localName() string { return "frankenphp" }
 func phpSource() (downloadSource, error) {
 	type release struct{ name, sum string }
 	releases := map[string]release{
-		"linux/amd64":  {"frankenphp-linux-x86_64", "7a603536acfe3ce04af26230677e7d4fab9a4527ea27eb5f46e38b07d28df32b"},
-		"linux/arm64":  {"frankenphp-linux-aarch64", "8942bc0c1c2876c3cae6bf6a2ae1f7ed3fba750ed3e83654b6c35b12e89d6c02"},
-		"darwin/arm64": {"frankenphp-mac-arm64", "50812881758de5406481847a508024a888450ea88cc2e6d6edf57e9274f98354"},
+		"linux/amd64":  {"frankenphp-linux-x86_64", "publisher"},
+		"linux/arm64":  {"frankenphp-linux-aarch64", "publisher"},
+		"darwin/arm64": {"frankenphp-mac-arm64", "publisher"},
 	}
 	r, ok := releases[goruntime.GOOS+"/"+goruntime.GOARCH]
 	if !ok && os.Getenv("LARASERVE_PHP_URL") == "" {
@@ -108,7 +108,7 @@ func EnsureComposer(rt *Runtime) error {
 	if st, err := os.Stat(rt.Composer); err == nil && st.Mode().IsRegular() {
 		return nil
 	}
-	source, err := sourceOverride("COMPOSER", downloadSource{"https://getcomposer.org/download/2.11.1/composer.phar", "6f1b891e1d4927d62740276c540fb490e47689e19e102c49e8da849794882f8c"})
+	source, err := sourceOverride("COMPOSER", downloadSource{"https://getcomposer.org/download/2.11.1/composer.phar", "publisher"})
 	if err != nil {
 		return err
 	}

@@ -16,7 +16,7 @@ func EnsurePHPMyAdmin(runtimesDir string) (string, error) {
 		return abs, validatePHPMyAdmin(abs)
 	}
 
-	source, err := sourceOverride("PHPMYADMIN", downloadSource{"https://files.phpmyadmin.net/phpMyAdmin/5.2.3/phpMyAdmin-5.2.3-all-languages.tar.gz", "12ba1c425fa4071abbd4e7668c9ebdeac0b0755a467a6d6d5026122bb47c102b"})
+	source, err := sourceOverride("PHPMYADMIN", downloadSource{"https://files.phpmyadmin.net/phpMyAdmin/5.2.3/phpMyAdmin-5.2.3-all-languages.tar.gz", "publisher"})
 	if err != nil {
 		return "", err
 	}

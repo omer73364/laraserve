@@ -4,7 +4,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-bcmath_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "dcd8e596d9e1511513d75fe59205e36068608cb6eb56b70d4da1d44a83dcb50f"
+      "SHA256": "publisher"
     }
   },
   {
@@ -12,7 +12,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-cli_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "d30678a0aa5768ffbbdfea74f02b825139ee60e2744b6b9887248a782485fc89"
+      "SHA256": "publisher"
     }
   },
   {
@@ -20,7 +20,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-common_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "11e4f8a9d057e45b28f1060a38ac5125c95a1d952ec3c3b65f59f53ac7d1ee04"
+      "SHA256": "publisher"
     }
   },
   {
@@ -28,7 +28,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-curl_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "79323bf5035ea92858ac32f43a931cae694758052a40c4a8edd82ff28c587828"
+      "SHA256": "publisher"
     }
   },
   {
@@ -36,7 +36,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-intl_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "d8d580c0bf2c582b5ad0f29f411972846654617fd874a37d4c94f8a15ad5eaab"
+      "SHA256": "publisher"
     }
   },
   {
@@ -44,7 +44,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-mbstring_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "ac669348daac37b3618e7b17219ab1aab0e81ba2b3c91c347f51993017afbc90"
+      "SHA256": "publisher"
     }
   },
   {
@@ -52,7 +52,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-mysql_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "c54a25acb9942b78f43259604bfc05924c887fc09ec42fc6858c3a2e4fbac226"
+      "SHA256": "publisher"
     }
   },
   {
@@ -60,7 +60,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-opcache_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "8388809ad19190d7269693919f144fe9babc923fa2db016ba17eb148911f46c5"
+      "SHA256": "publisher"
     }
   },
   {
@@ -68,7 +68,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-sqlite3_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "8236078460d7ed9038fd345a13f3e62b1bad160d4ba35abece28587f920b3814"
+      "SHA256": "publisher"
     }
   },
   {
@@ -76,7 +76,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-xml_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "efb64bcddd394f5eee6f2fef0bd8bdbaa449c8e594e05bafcf07993080eb3832"
+      "SHA256": "publisher"
     }
   },
   {
@@ -84,7 +84,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-zip_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "e8ede0632fe99e05a0eb6584f4d12dab4d61612c6ab91200582d1b9e2e8d2d2c"
+      "SHA256": "publisher"
     }
   },
   {
@@ -92,7 +92,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-json_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "e453c388d7ba632aac8ad65596d0e3d1b9ff0e739c6f4060721df37304ad6d1a"
+      "SHA256": "publisher"
     }
   },
   {
@@ -100,7 +100,7 @@
     "Version": "1:7.4.33-31+ubuntu22.04.1+deb.sury.org+1",
     "Source": {
       "URL": "https://ppa.launchpadcontent.net/ondrej/php/ubuntu/pool/main/p/php7.4/php7.4-readline_7.4.33-31+ubuntu22.04.1+deb.sury.org+1_amd64.deb",
-      "SHA256": "b1c939d3c82f3cce4f1ea569435160b9de76a1c63bd59239d923aa36216a483d"
+      "SHA256": "publisher"
     }
   }
 ]
