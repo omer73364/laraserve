@@ -1,0 +1,34 @@
+[
+  {
+    "Name": "libnspr4",
+    "Version": "2:4.35-0ubuntu0.22.04.1",
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/nspr/libnspr4_4.35-0ubuntu0.22.04.1_amd64.deb",
+      "SHA256": "b3c96e4a61675c87f8d9655109346748847d859abc95f20493159d06b5aa30ef"
+    }
+  },
+  {
+    "Name": "libnss3",
+    "Version": "2:3.98-0ubuntu0.22.04.5",
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/n/nss/libnss3_3.98-0ubuntu0.22.04.5_amd64.deb",
+      "SHA256": "75f3879ab9969a930b5bf4b9229345d57e2ebe310ad8ce58c9d91393d823b236"
+    }
+  },
+  {
+    "Name": "libsqlite3-0",
+    "Version": "3.37.2-2ubuntu0.8",
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/main/s/sqlite3/libsqlite3-0_3.37.2-2ubuntu0.8_amd64.deb",
+      "SHA256": "6e22b1e8d375fed6a1d52cad5887e762b6cdeaba137595e726c95486968dfab5"
+    }
+  },
+  {
+    "Name": "libnss3-tools",
+    "Version": "2:3.98-0ubuntu0.22.04.5",
+    "Source": {
+      "URL": "https://archive.ubuntu.com/ubuntu/pool/universe/n/nss/libnss3-tools_3.98-0ubuntu0.22.04.5_amd64.deb",
+      "SHA256": "7df3d46f262f5a719599917139de023a3f82e5a1a8887cda2c36435cafe5158e"
+    }
+  }
+]
