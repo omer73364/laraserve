@@ -1,8 +1,8 @@
 # LaraServe development roadmap
 
-Status: Phase 1 local foundation work started. See [the checkpoint record](docs/phase-1-checkpoint.md) for delivered work, test evidence, deferred checks, and restore points.
+Status: Phase 2 local lifecycle implementation is ready for its tested checkpoint. See [Phase 1](docs/phase-1-checkpoint.md) and [Phase 2](docs/phase-2-checkpoint.md) for evidence, limits, and restore points.
 
-Updated: 2026-11-02
+Updated: 2026-11-03
 
 ## Direction
 
@@ -22,11 +22,11 @@ Completion target: a fresh supported Ubuntu installation can reliably start an a
 
 ## Phase 2: Project and service management
 
-- [ ] Introduce a project registry with stable project identities.
-- [ ] Build a background supervisor with explicit service ownership, lifecycle management, and crash recovery.
-- [ ] Provide project list, start, stop, restart, and status commands.
-- [ ] Persist domain and port assignments and prevent duplicate processes or conflicting starts.
-- [ ] Define a common service interface for web servers, databases, and later development services.
+- [x] Introduce a project registry with stable project identities.
+- [x] Build a background supervisor with explicit service ownership, lifecycle management, and crash recovery (Linux verified; Windows cross-builds; macOS hard-crash cleanup deferred).
+- [x] Provide project list, start, stop, restart, and status commands.
+- [x] Persist domain and port assignments and prevent duplicate processes or conflicting starts.
+- [x] Define a common service interface for web servers, databases, and later development services.
 
 Completion target: several projects run together without duplicate processes or conflicts.
 
@@ -120,4 +120,4 @@ The phases describe sequencing, not release dates. Revisit priorities when imple
 
 ## Recommended next milestone
 
-Finish remaining startup reliability fixes and implement the project registry and service supervisor. This foundation supports the dashboard, shared databases, queues, Vite, and optional startup at login.
+Build Phase 3 on the tested registry and service lifecycle core: a protected local dashboard with status/logs first, followed by project controls. Hosted CI activation and public release publication remain separately deferred.

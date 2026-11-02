@@ -2,7 +2,7 @@
 
 ## Phase-by-phase work
 
-The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-1-foundation`.
+The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-2-supervision`. Phase 1 remains available at its own checkpoint.
 
 The baseline before Phase 1 is the annotated tag `restore/before-phase-1-2026-11-02`. These are source-code restore points; databases and private runtime state are separate and are not stored in Git.
 
@@ -62,3 +62,18 @@ sha256sum -c SHA256SUMS
 ```
 
 Checksums detect changed files; they are not release signatures. These commands do not upload files, publish a release, push Git changes, or run GitHub Actions.
+
+## Phase 2 checkpoint
+
+The Phase 2 baseline is `restore/before-phase-2-2026-11-03`; the tested local result is `restore/phase-2-local-ready`. A standalone history bundle is saved as `dist/checkpoints/phase-2.bundle`. Clone that bundle with `-b codex/phase-2-supervision` to restore it in a new directory without changing existing work.
+
+See [Phase 2 evidence](phase-2-checkpoint.md) and [project lifecycle](projects.md). Real Linux lifecycle tests use an explicitly supplied client and existing trusted runtimes, with isolated temporary projects and databases:
+
+```bash
+LARASERVE_TEST_LIFECYCLE_BINARY=/absolute/path/to/laraserve \
+LARASERVE_TEST_FRANKENPHP=/absolute/path/to/frankenphp \
+LARASERVE_TEST_MYSQL_RUNTIME=/absolute/path/to/mysql-distribution \
+go test ./integration -run 'TestReal(ProjectLifecycle|MySQLLifecycleRecovery)' -v -timeout 5m
+```
+
+The MySQL test creates a temporary runtime view and fresh data; the original runtime and all user databases remain untouched. Omit the MySQL variable to run only the web lifecycle test. No workflow is activated and no source or artifact is published by these commands.

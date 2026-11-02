@@ -204,3 +204,7 @@ Windows cache installation uses OS file locks. Custom hosts-file changes require
 ### Automatic trust recovery
 
 After initial trust approval, Linux HTTPS startup verifies the CA certificate and NSS trust flags in discovered browser profiles. Missing, failed, or reset imports are retried automatically, using private cached tools if system NSS tools are absent. A missing or replaced recorded system anchor also triggers repair. Healthy anchors avoid another system installation. `--no-trust` skips repair and leaves existing trust records untouched, including when local certificate constraints change.
+
+### Project lifecycle state
+
+Private `registry/` records store canonical source identities, resolved roots, reusable arguments, selected runtimes, and domain/port assignments. `control/` holds authenticated owner metadata and private startup logs. Source aliases share ownership; old private state IDs are preserved when importing existing direct projects. See [project lifecycle](projects.md) for commands, restart semantics, and platform limits.

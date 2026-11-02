@@ -133,3 +133,9 @@ laraserve doctor --report report.json
 ```
 
 The JSON contains the LaraServe version, OS/architecture, tool and project counts, and controlled health-check messages. It excludes paths, domains, environment variables, credentials, raw errors, configuration contents, and logs. It refuses to overwrite an existing file. Send or attach a report only when you choose to share it.
+
+## Background startup or stale ownership
+
+Use `laraserve status <path-or-ID>` and the private startup log printed by `start`. For first-time administrator prompts, use foreground `serve` once; background workers have no interactive input.
+
+A remembered busy port requires an explicit `--port` override. Duplicate owners are rejected; use `stop` or `restart` instead of deleting lock files. Known stale MySQL ownership is recovered after the previous owner exits; unknown legacy locks are preserved for verification. See [project lifecycle](projects.md).

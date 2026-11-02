@@ -72,6 +72,11 @@ laraserve serve my-app --http
 | ▶️ | `laraserve serve [path]` | Serve the current project or another app. |
 | 🆕 | `laraserve new <path>` | Create an app in a new or empty directory. |
 | 🎛️ | `laraserve versions [path]` | Show selected and available runtime versions without downloading them. |
+| 🗂️ | `laraserve projects` | List registered apps and their status. |
+| ▶️ | `laraserve start [path/name/ID]` | Run a project in the background. |
+| ⏹️ | `laraserve stop [path/name/ID]` | Stop only that project’s owner. |
+| 🔄 | `laraserve restart [path/name/ID]` | Restart with saved settings, without replaying migrations. |
+| 📊 | `laraserve status [path/name/ID]` | Inspect its owner, URL, and runtimes. |
 | 📦 | `laraserve pack [path] -o app.laraserve` | Bundle an app with its dependencies and existing built assets. |
 | 🔐 | `laraserve trust` / `laraserve untrust` | Install or remove local CA trust. |
 | 🩺 | `laraserve doctor [--report FILE]` | Inspect local setup without downloads; optionally save a private support report. |
@@ -218,6 +223,7 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 
 | | Guide | Contents |
 |---|---|---|
+| 🗂️ | [Project lifecycle](docs/projects.md) | Background apps, saved options, ownership, and crash recovery. |
 | ⚙️ | [Runtime & configuration](docs/runtime.md) | Version selection, all serve flags, data layout, mirrors, and runtime sources. |
 | 🛠️ | [Development & restore points](docs/development.md) | Local checks, release archives, phase checkpoints, and safe source rollback. |
 | 🔧 | [Troubleshooting & limits](docs/troubleshooting.md) | Firefox trust, missing libraries, migration failures, and platform gaps. |
