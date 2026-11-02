@@ -37,7 +37,7 @@ func TestNewUsesBundledComposer(t *testing.T) {
 			if fail {
 				script += "exit 7\n"
 			} else {
-				script += "shift 8\n/bin/mkdir -p \"$1\"\nprintf '' > \"$1/artisan\"\nprintf '%s' '{\"require\":{\"laravel/framework\":\"^12.0\"}}' > \"$1/composer.json\"\n"
+				script += "shift 9\n/bin/mkdir -p \"$1\"\nprintf '' > \"$1/artisan\"\nprintf '%s' '{\"require\":{\"laravel/framework\":\"^12.0\"}}' > \"$1/composer.json\"\n"
 			}
 			if err := os.WriteFile(php, []byte(script), 0o700); err != nil {
 				t.Fatal(err)
@@ -52,11 +52,16 @@ func TestNewUsesBundledComposer(t *testing.T) {
 			if (err != nil) != fail {
 				t.Fatalf("unexpected result: %v", err)
 			}
+			if !fail {
+				if _, err := os.Stat(filepath.Join(target, "artisan")); err != nil {
+					t.Fatal(err)
+				}
+			}
 			b, err := os.ReadFile(log)
 			if err != nil {
 				t.Fatal(err)
 			}
-			want := strings.Join([]string{"php-cli", filepath.Join(dir, "composer.phar"), "create-project", "--no-interaction", "--prefer-dist", "--no-progress", "--", "laravel/laravel", target, "^12.0", ""}, "\n")
+			want := strings.Join([]string{"php-cli", filepath.Join(dir, "composer.phar"), "create-project", "--no-interaction", "--prefer-dist", "--no-progress", "--no-scripts", "--", "laravel/laravel", target, "^12.0", ""}, "\n")
 			if string(b) != want {
 				t.Fatalf("unexpected Composer arguments: %s", b)
 			}
