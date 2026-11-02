@@ -67,7 +67,7 @@ func fakeRuntime(t *testing.T) (string, []string) {
 			return err
 		}
 		if strings.Contains(statement, "CREATE DATABASE") {
-			return os.WriteFile(filepath.Join(dir, "provisioned"), []byte("yes"), 0600)
+			return os.WriteFile(filepath.Join(dir, "provisioned"), []byte(statement), 0600)
 		}
 		return nil
 	}
@@ -99,7 +99,7 @@ func TestManagedLifecycle(t *testing.T) {
 		t.Helper()
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		t.Cleanup(cancel)
-		s, err := Start(ctx, base, state, env)
+		s, err := Start(ctx, base, state, env, "my-app")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,6 +107,13 @@ func TestManagedLifecycle(t *testing.T) {
 		return s
 	}
 	s := start()
+	if s.Env["DB_DATABASE"] != "my_app" {
+		t.Fatal(s.Env)
+	}
+	provisioned, err := os.ReadFile(filepath.Join(base, "provisioned"))
+	if err != nil || !strings.Contains(string(provisioned), "CREATE DATABASE IF NOT EXISTS `my_app`") || !strings.Contains(string(provisioned), "GRANT ALL PRIVILEGES ON `my_app`.*") {
+		t.Fatalf("incorrect provisioning: %s %v", provisioned, err)
+	}
 	password := s.Env["DB_PASSWORD"]
 	if len(password) != 64 || s.Env["DB_CONNECTION"] != "mysql" || s.Env["DB_SOCKET"] != s.Socket {
 		t.Fatalf("invalid app connection configuration")
