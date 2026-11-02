@@ -43,7 +43,7 @@ laraserve serve my-app
 laraserve serve my-app --http
 ```
 
-> 💡 The client contains configuration and download catalogues, not embedded server binaries. First use downloads the tools it needs and verifies their SHA-256 checksums. Prepared apps can run offline once their runtimes and dependencies are cached.
+> 💡 The client contains configuration and download catalogues, not embedded server binaries. First use downloads the tools it needs and verifies checksums fetched from the publishers. Prepared apps can run offline once their runtimes and dependencies are cached.
 
 **Frontend assets need your own Node tooling.** LaraServe does not install Node or run your asset build.
 

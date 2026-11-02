@@ -40,7 +40,7 @@ An explicit `new --php-version` also writes `.php-version` into the created app.
 | ⚡ | PHP 8.5 | [FrankenPHP](https://frankenphp.dev), serving PHP directly with Caddy. |
 | 🧩 | PHP 8.2–8.4 | Portable CLI builds from [nunomaduro/static-php-builds](https://github.com/nunomaduro/static-php-builds), with Caddy proxying to a private PHP development server. These archives include Composer. |
 | 🕰️ | PHP 8.0 / 8.1 | Static CLI builds mirrored by [heera/php-binaries](https://github.com/heera/php-binaries), using the same private backend model. |
-| 📦 | PHP 7.4 | Matching CLI and extension packages from [Ondřej Surý's PHP repository](https://launchpad.net/~ondrej/+archive/ubuntu/php), built for Ubuntu 22.04 and extracted privately. Missing supported libraries come from pinned official Ubuntu packages. |
+| 📦 | PHP 7.4 | Matching CLI and extension packages from [Ondřej Surý's PHP repository](https://launchpad.net/~ondrej/+archive/ubuntu/php), built for Ubuntu 22.04 and extracted privately. Missing supported libraries come from versioned official Ubuntu packages. |
 
 Both Artisan and web requests use the selected PHP version. Native PHP backends are intended for local development. The current legacy patches are 7.4.33, 8.0.30, and 8.1.34; run `versions` for the full platform-specific catalogue.
 
@@ -126,11 +126,11 @@ phpMyAdmin normally uses `https://localhost:8444` or `http://localhost:8081`; fo
 
 Tools download only when needed. Completed, verified installations are reused without network requests. Incomplete downloads retry on the next run. Runtime caches and database data stay separate.
 
-Missing MySQL `libaio` / `libnuma` libraries are reused from the OS or downloaded privately on Linux amd64. Ubuntu's `libaio1t64` naming is handled locally. PHP 7.4 similarly resolves supported missing libraries from pinned packages. No package installation scripts run. Dependency caches retain copyright notices and can be reused offline across runtime installations.
+Missing MySQL `libaio` / `libnuma` libraries are reused from the OS or downloaded privately on Linux amd64. Ubuntu's `libaio1t64` naming is handled locally. PHP 7.4 similarly resolves supported missing libraries from versioned packages. No package installation scripts run. Dependency caches retain copyright notices and can be reused offline across runtime installations.
 
 Browser CA import and removal on Linux prefer a system `certutil`. If it is
 missing, Linux amd64 with glibc 2.35+ downloads private NSS tools and matching NSS,
-NSPR, and SQLite libraries from checksum-pinned official Ubuntu packages.
+NSPR, and SQLite libraries from checksum-versioned official Ubuntu packages.
 Downloads happen only when browser databases need trust setup, after the user
 approves trust installation. The helper is cached under `runtimes/nss-*` and is
 also used for `untrust`. No global package installation or package scripts run;
@@ -184,3 +184,9 @@ The local CA is constrained to local development names and addresses: localhost,
 OS/browser trust, managed hosts entries, and Linux low-port capabilities require prompts. Declining hosts changes uses a `.localhost` fallback where needed. Choosing plain HTTP does not require CA trust; a custom domain can still require name resolution.
 
 LAN clients must trust the local CA themselves. phpMyAdmin remains loopback-only even when the Laravel app binds to `0.0.0.0`.
+
+### Publisher checksums
+
+Built-in downloads resolve checksums when an uncached tool is downloaded; checksum values are no longer compiled into LaraServe. GitHub release asset metadata, Composer and phpMyAdmin checksum files, and Ubuntu/PPA package indexes supply SHA-256 values. Oracle's MySQL archives use the publisher's HTTPS MD5 sidecars, which detect transfer corruption but provide weaker integrity guarantees than SHA-256. Custom mirrors still require an explicit SHA-256 value. Missing metadata or a mismatched download stops installation; LaraServe never accepts a mismatch automatically.
+
+Installed runtimes do not need online checksum lookups on subsequent starts. Package and runtime versions remain selected explicitly; checksum lookup does not upgrade PHP or migrate a database.
