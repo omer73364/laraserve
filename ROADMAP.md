@@ -81,6 +81,7 @@ Existing private databases must remain intact. Introduce shared mode as an optio
 - [ ] Add Xdebug where runtime builds support it, with per-project settings and IDE guidance.
 - [ ] Offer optional startup at login and per-project automatic startup.
 - [ ] Add project templates and service presets.
+- [ ] Validate the experimental native Windows amd64 implementation in Windows CI and on user machines.
 - [ ] Document and test WSL workflows.
 - [ ] Expand tested Linux architectures and macOS support before claiming full support.
 
@@ -92,7 +93,7 @@ Completion target: cover more development workflows with clearly documented plat
 - Optional public tunnels for demos and webhooks, explicitly enabled by the user.
 - Advanced monitoring and resource history.
 - Idle service shutdown only after active connections, workers, scheduler activity, and reliable restart behavior are accounted for.
-- Broader database tooling and native Windows support if demand justifies the maintenance cost.
+- Broader database tooling and expansion of native Windows support beyond amd64.
 
 ## Architecture and product rules
 

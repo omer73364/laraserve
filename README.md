@@ -129,9 +129,11 @@ PHP pins must satisfy the project's Composer requirements, locked dependencies, 
 | 🐧 | Linux amd64 | PHP 7.4 and 8.0–8.5 | MySQL 8.0 and 8.4 |
 | 🦾 | Linux arm64 | PHP 8.0–8.5 | Not provided |
 | 🍎 | macOS arm64 | Default PHP 8.5 | Not provided |
-| 🪟 | Windows | Not implemented | Not implemented |
+| 🪟 | Windows amd64 (experimental) | Native PHP 7.4 and 8.0–8.5 | MySQL 8.0 and 8.4 |
 
-PHP 7.4 requires **glibc 2.35+**, including Ubuntu 22.04/24.04. MySQL 8.0 requires glibc 2.17+; MySQL 8.4 requires glibc 2.28+. Linux is tested; macOS runtime paths remain untested. A cross-compiled client does not guarantee automatic runtime availability.
+On Windows, use the native x64 executable; WSL is not required. PHP and Caddy ZIP distributions download on demand. The Microsoft Visual C++ 2015–2022 x64 runtime must already be installed. See [Windows setup](docs/windows.md) for PowerShell commands and current limits.
+
+PHP 7.4 requires **glibc 2.35+**, including Ubuntu 22.04/24.04. MySQL 8.0 requires glibc 2.17+; MySQL 8.4 requires glibc 2.28+. Linux is tested; native Windows runtime execution awaits Windows CI validation, and macOS runtime paths remain untested. A cross-compiled client does not guarantee automatic runtime availability.
 
 <details>
 <summary>🕰️ Laravel 8 and older PHP</summary>
@@ -224,7 +226,7 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 ```bash
 make build  # build bin/laraserve
 make test   # run the Go test suite
-make dist   # cross-compile Linux and macOS clients
+make dist   # cross-compile Linux, macOS and Windows clients
 ```
 
 Builds do not download or embed runtime executables. Local website source lives in [`website/dist/`](website/dist/).

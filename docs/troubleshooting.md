@@ -116,8 +116,8 @@ First verify that no MySQL process is using that data directory. Only then remov
 |---|---|---|
 | 🐧 | Linux | The tested runtime and host-integration platform. PHP 7.4 requires amd64 and glibc 2.35+. |
 | 🍎 | macOS | Runtime and host-integration paths are untested; automatic PHP is limited to the default 8.5 runtime on arm64. |
-| 🪟 | Windows | Automatic runtime installation is not implemented. |
-| 🗄️ | MySQL | Automatic distribution and support-library downloads are Linux amd64 only. |
+| 🪟 | Windows amd64 | Native runtime implementation is experimental; see [Windows setup](windows.md). Windows execution awaits CI validation. |
+| 🗄️ | MySQL | Automatic distributions support Linux/Windows amd64. Automatic Linux support-library downloads are Linux amd64 only. |
 | 🧶 | Node | Node installation and frontend builds are not managed. Build assets before serving or packing an app that needs them. |
 | 🧱 | Sandbox | `--sandbox` is not implemented. The scrubbed environment is not an OS sandbox. |
 | 🗂️ | Laravel 8 | Uses its own writable `storage/` directory; use `--copy` to preserve an untouched original. |

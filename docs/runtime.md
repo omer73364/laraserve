@@ -132,7 +132,7 @@ Missing MySQL `libaio` / `libnuma` libraries are reused from the OS or downloade
 
 Browser CA import and removal on Linux prefer a system `certutil`. If it is
 missing, Linux amd64 with glibc 2.35+ downloads private NSS tools and matching NSS,
-NSPR, and SQLite libraries from checksum-versioned official Ubuntu packages.
+NSPR, and SQLite libraries from versioned official Ubuntu packages verified against publisher metadata.
 Downloads happen only when browser databases need trust setup, after the user
 approves trust installation. The helper is cached under `runtimes/nss-*` and is
 also used for `untrust`. No global package installation or package scripts run;
@@ -147,7 +147,7 @@ OS-wide CA installation may still need administrator privileges.
 | 🗄️ | `LARASERVE_MYSQL_DIR` | An unpacked MySQL distribution matching the selected exact version. |
 | 🧭 | `LARASERVE_PHPMYADMIN_DIR` | An unpacked phpMyAdmin distribution including `vendor/`. |
 
-Automatic MySQL downloads are Linux amd64 only. Other supported Unix environments can provide a matching distribution themselves.
+Automatic MySQL downloads support Linux amd64 and Windows amd64. Other supported Unix environments can provide a matching distribution themselves.
 
 </details>
 
@@ -192,3 +192,11 @@ LAN clients must trust the local CA themselves. phpMyAdmin remains loopback-only
 Built-in downloads resolve checksums when an uncached tool is downloaded; checksum values are no longer compiled into LaraServe. GitHub release asset metadata, Composer and phpMyAdmin checksum files, and Ubuntu/PPA package indexes supply SHA-256 values. Oracle's MySQL archives use the publisher's HTTPS MD5 sidecars, which detect transfer corruption but provide weaker integrity guarantees than SHA-256. Custom mirrors still require an explicit SHA-256 value. Missing metadata or a mismatched download stops installation; LaraServe never accepts a mismatch automatically.
 
 Installed runtimes do not need online checksum lookups on subsequent starts. Package and runtime versions remain selected explicitly; checksum lookup does not upgrade PHP or migrate a database.
+
+### Native Windows runtimes
+
+Windows amd64 uses official PHP Windows NTS ZIP builds (7.4 and 8.0–8.5) and a separate official Caddy executable. PHP serves a loopback backend behind Caddy for HTTP/HTTPS. Composer uses native `php.exe`, including its `@php` scripts. PHP extension configuration and the CA bundle live in private caches. Downloads use publisher checksums; Windows PHP sources are verified against PHP's current `sha256sum.txt`.
+
+Managed Windows MySQL uses an ephemeral IPv4 loopback TCP port, because Unix sockets are unavailable. A private generated root password is configured through an initialization file before startup readiness, and applications receive a separate database-scoped account. The initialization file is removed after startup. Shutdown requests use authenticated SQL before falling back to process termination. phpMyAdmin uses the same loopback host and port. External databases remain available with `--mysql=false`.
+
+Windows cache installation uses OS file locks. Custom hosts-file changes require an Administrator terminal; `.localhost` names avoid that requirement. CA trust uses Windows' current-user certificate store. See [Windows setup and verification](windows.md).
