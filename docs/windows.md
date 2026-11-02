@@ -1,6 +1,6 @@
 # Native Windows support
 
-LaraServe has an experimental native Windows amd64 implementation. WSL and Docker are not required. The implementation cross-builds from Linux, but Windows execution must be verified by the included Windows CI workflow before treating it as tested support.
+LaraServe has an experimental native Windows amd64 implementation. WSL and Docker are not required. The implementation cross-builds from Linux, but Windows execution must be verified on Windows before treating it as tested support.
 
 ## Setup
 
@@ -54,7 +54,7 @@ Migrations remain explicitly opt-in. Use `--migrate` only when you intend to app
 
 ## Verification
 
-`.github/workflows/test.yml` runs unit tests and a native integration job on Windows Server 2022. The integration test downloads official runtimes into temporary storage, creates a Laravel project in a path containing spaces, checks Composer `@php` hooks, verifies a fresh database has no tables, explicitly migrates it, requests Laravel over verified HTTPS, and restarts MySQL. It does not edit hosts or install certificates into the machine trust store.
+`docs/ci-workflow.example.yml` is an inactive example for running unit tests and a native integration job on Windows Server 2022. Automatic GitHub workflows are disabled; this file does not run anything. The integration test downloads official runtimes into temporary storage, creates a Laravel project in a path containing spaces, checks Composer `@php` hooks, verifies a fresh database has no tables, explicitly migrates it, requests Laravel over verified HTTPS, and restarts MySQL. It does not edit hosts or install certificates into the machine trust store.
 
 Run that integration test on a Windows machine with the prerequisite installed:
 
