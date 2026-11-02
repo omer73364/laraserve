@@ -2,7 +2,7 @@
 
 ## Phase-by-phase work
 
-The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-2-supervision`. Phase 1 remains available at its own checkpoint.
+The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-3-dashboard`. Earlier phases remain available at their own checkpoints.
 
 The baseline before Phase 1 is the annotated tag `restore/before-phase-1-2026-11-02`. These are source-code restore points; databases and private runtime state are separate and are not stored in Git.
 
@@ -77,3 +77,17 @@ go test ./integration -run 'TestReal(ProjectLifecycle|MySQLLifecycleRecovery)' -
 ```
 
 The MySQL test creates a temporary runtime view and fresh data; the original runtime and all user databases remain untouched. Omit the MySQL variable to run only the web lifecycle test. No workflow is activated and no source or artifact is published by these commands.
+
+## Phase 3 checkpoint
+
+The local dashboard and its limits are documented in [Phase 3](phase-3-checkpoint.md). Restore to `restore/phase-3-local-ready`, or clone the verified standalone `dist/checkpoints/phase-3.bundle` with branch `codex/phase-3-dashboard`.
+
+The opt-in real dashboard test uses the same temporary PHP fixture settings as the Phase 2 lifecycle tests:
+
+```sh
+LARASERVE_TEST_LIFECYCLE_BINARY=/absolute/path/to/laraserve \
+LARASERVE_TEST_FRANKENPHP=/absolute/path/to/frankenphp \
+go test ./integration -run TestRealDashboardLifecycle -v -timeout 3m
+```
+
+Use the built client, not a `go run` wrapper: detached workers must be able to reopen the same executable. The dashboard assets are embedded directly from `internal/dashboard/assets`; no Node build or external CDN is required. `node --check internal/dashboard/assets/app.js` optionally verifies script syntax when Node is available.

@@ -1,6 +1,6 @@
 # LaraServe development roadmap
 
-Status: Phase 2 local lifecycle implementation is ready for its tested checkpoint. See [Phase 1](docs/phase-1-checkpoint.md) and [Phase 2](docs/phase-2-checkpoint.md) for evidence, limits, and restore points.
+Status: Phase 3 local dashboard is ready for its tested checkpoint. See [Phase 1](docs/phase-1-checkpoint.md), [Phase 2](docs/phase-2-checkpoint.md), and [Phase 3](docs/phase-3-checkpoint.md) for evidence, limits, and restore points.
 
 Updated: 2026-11-03
 
@@ -32,11 +32,11 @@ Completion target: several projects run together without duplicate processes or 
 
 ## Phase 3: Local dashboard
 
-- [ ] Expose the shared management core through a protected local API.
-- [ ] Start with a read-only project dashboard showing status, URLs, PHP versions, database versions, and logs.
-- [ ] Add start, stop, restart, and open-app controls.
-- [ ] Add searchable Laravel, PHP, web server, and database logs.
-- [ ] Show service health and measured CPU and memory use.
+- [x] Expose the shared management core through a protected local API.
+- [x] Start with a read-only project dashboard showing status, URLs, PHP versions, database versions, and logs.
+- [x] Add start, stop, restart, and open-app controls.
+- [x] Add searchable Laravel, combined PHP/web server, managed MySQL, and startup log tails.
+- [x] Show owner/readiness health and measured CPU and memory use (Linux counters; other platforms report unavailable).
 
 Completion target: manage existing projects comfortably from the browser.
 
@@ -120,4 +120,4 @@ The phases describe sequencing, not release dates. Revisit priorities when imple
 
 ## Recommended next milestone
 
-Build Phase 3 on the tested registry and service lifecycle core: a protected local dashboard with status/logs first, followed by project controls. Hosted CI activation and public release publication remain separately deferred.
+Build Phase 4 on the tested dashboard and lifecycle core: shared project configuration, validated settings, and deliberate project actions. Hosted CI activation and public release publication remain separately deferred.
