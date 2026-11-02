@@ -4,7 +4,10 @@ package serve
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -18,23 +21,24 @@ import (
 )
 
 type Config struct {
-	NativePHP   string
-	BackendPort int
-	Admin       *AdminConfig
-	Context     context.Context // optional parent lifetime (managed database)
-	PHP         string          // frankenphp binary
-	Root        string          // project root (contains public/)
-	StateDir    string
-	Env         []string
-	AppEnv      map[string]string // also injected via php_server `env`
-	Domain      string
-	Host        string // bind address
-	Port        int
-	HTTPS       bool
-	Cert        string
-	Key         string
-	LAN         bool // accept any Host header (for --host 0.0.0.0)
-	Verbose     bool
+	readinessToken string
+	NativePHP      string
+	BackendPort    int
+	Admin          *AdminConfig
+	Context        context.Context // optional parent lifetime (managed database)
+	PHP            string          // frankenphp binary
+	Root           string          // project root (contains public/)
+	StateDir       string
+	Env            []string
+	AppEnv         map[string]string // also injected via php_server `env`
+	Domain         string
+	Host           string // bind address
+	Port           int
+	HTTPS          bool
+	Cert           string
+	Key            string
+	LAN            bool // accept any Host header (for --host 0.0.0.0)
+	Verbose        bool
 }
 
 // AdminConfig is always bound to IPv4 loopback, independently of the app host.
@@ -74,11 +78,14 @@ func Caddyfile(c Config) string {
 		}
 	}
 	var b strings.Builder
-	b.WriteString("{\n\tadmin off\n\tauto_https off\n\tskip_install_trust\n}\n\n")
+	b.WriteString("{\n\tadmin off\n\tauto_https off\n\tskip_install_trust\n\tpki {\n\t\tca local {\n\t\t}\n\t}\n}\n\n")
 	b.WriteString(strings.Join(addrs, ", ") + " {\n")
 	fmt.Fprintf(&b, "\tbind %s\n", c.Host)
 	if c.HTTPS {
 		fmt.Fprintf(&b, "\ttls %s %s\n", q(c.Cert), q(c.Key))
+	}
+	if c.readinessToken != "" {
+		fmt.Fprintf(&b, "\trespond /.__laraserve_ready_%s %q 200\n", c.readinessToken, c.readinessToken)
 	}
 	fmt.Fprintf(&b, "\troot * %s\n", q(filepath.Join(c.Root, "public")))
 	if c.BackendPort != 0 {
@@ -143,8 +150,21 @@ func CanBind(host string, port int) bool {
 }
 
 // Run starts FrankenPHP and blocks until it exits or Ctrl+C is pressed.
-// onReady is called once the port accepts connections.
+// onReady is called only after this launch answers its private readiness probe.
 func Run(c Config, onReady func()) error {
+	if err := checkPort(c.Host, c.Port); err != nil {
+		return err
+	}
+	if c.Admin != nil {
+		if err := checkPort("127.0.0.1", c.Admin.Port); err != nil {
+			return err
+		}
+	}
+	token := make([]byte, 24)
+	if _, err := rand.Read(token); err != nil {
+		return err
+	}
+	c.readinessToken = hex.EncodeToString(token)
 	if err := os.MkdirAll(filepath.Join(c.StateDir, "logs"), 0o755); err != nil {
 		return err
 	}
@@ -159,9 +179,9 @@ func Run(c Config, onReady func()) error {
 	if parent == nil {
 		parent = context.Background()
 	}
-	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(signalCtx)
 	defer cancel()
 	backendFailures := make(chan error, 2)
 	nativeStop := func() {
@@ -203,7 +223,7 @@ func Run(c Config, onReady func()) error {
 	cmd.Dir = c.Root
 	cmd.Env = c.Env
 	if c.Verbose {
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		cmd.Stdout, cmd.Stderr = io.MultiWriter(logf, os.Stdout), io.MultiWriter(logf, os.Stderr)
 	} else {
 		cmd.Stdout, cmd.Stderr = logf, logf
 	}
@@ -216,27 +236,35 @@ func Run(c Config, onReady func()) error {
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
-	ready := make(chan bool, 1)
-	go func() {
-		addr := net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
-		if c.Host == "0.0.0.0" {
-			addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(c.Port))
-		}
-		for i := 0; i < 100; i++ {
-			if conn, err := net.DialTimeout("tcp", addr, 200*time.Millisecond); err == nil {
-				conn.Close()
-				ready <- true
-				return
-			}
-			time.Sleep(100 * time.Millisecond)
-		}
-		ready <- false
-	}()
+	ready := make(chan error, 1)
+	go func() { ready <- waitReady(ctx, c) }()
 
 	for {
 		select {
-		case ok := <-ready:
-			if ok && onReady != nil {
+		case probeErr := <-ready:
+			if probeErr != nil {
+				cancel()
+				<-done
+				select {
+				case failure := <-backendFailures:
+					return fmt.Errorf("%w; see %s", failure, logPath)
+				default:
+				}
+				if signalCtx.Err() != nil {
+					return nil
+				}
+				return fmt.Errorf("server did not become ready: %w; see %s", probeErr, logPath)
+			}
+			// A failed child can race with its last response. Do not announce it.
+			select {
+			case exitErr := <-done:
+				if signalCtx.Err() != nil {
+					return nil
+				}
+				return serverFailure(c, exitErr, logPath)
+			default:
+			}
+			if onReady != nil {
 				onReady()
 			}
 			ready = nil
@@ -249,7 +277,7 @@ func Run(c Config, onReady func()) error {
 			if ctx.Err() != nil {
 				return nil // stopped by Ctrl+C
 			}
-			return fmt.Errorf("server exited: %v\n%s", err, tail(logPath, 15))
+			return serverFailure(c, err, logPath)
 		}
 	}
 }
