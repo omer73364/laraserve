@@ -128,6 +128,14 @@ Tools download only when needed. Completed, verified installations are reused wi
 
 Missing MySQL `libaio` / `libnuma` libraries are reused from the OS or downloaded privately on Linux amd64. Ubuntu's `libaio1t64` naming is handled locally. PHP 7.4 similarly resolves supported missing libraries from pinned packages. No package installation scripts run. Dependency caches retain copyright notices and can be reused offline across runtime installations.
 
+Browser CA import and removal on Linux prefer a system `certutil`. If it is
+missing, Linux amd64 with glibc 2.35+ downloads private NSS tools and matching NSS,
+NSPR, and SQLite libraries from checksum-pinned official Ubuntu packages.
+Downloads happen only when browser databases need trust setup, after the user
+approves trust installation. The helper is cached under `runtimes/nss-*` and is
+also used for `untrust`. No global package installation or package scripts run;
+OS-wide CA installation may still need administrator privileges.
+
 <details>
 <summary>📂 Use an existing distribution</summary>
 

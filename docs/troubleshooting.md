@@ -15,7 +15,21 @@ Trust installation is retried even when LaraServe previously recorded the CA as 
 <details>
 <summary>🧰 The certutil command is missing</summary>
 
-Browser trust may need your distribution's NSS tools:
+On Linux amd64 with glibc 2.35+ (including Ubuntu 22.04/24.04), LaraServe
+reuses an installed `certutil` or automatically downloads a private, verified
+copy with matching NSS libraries. Close Firefox and run:
+
+```bash
+laraserve trust
+```
+
+First use needs internet; later imports and removals reuse the cache offline.
+No `sudo apt install libnss3-tools` is needed for this private helper. OS-wide CA
+trust can still request administrator privileges through the normal trust prompt.
+If no browser profile exists yet, open Firefox once, close it, then retry.
+
+On other platforms, or if automatic downloading is unavailable, install your
+distribution's tool and retry:
 
 ```bash
 # Debian / Ubuntu
@@ -24,8 +38,6 @@ sudo apt install libnss3-tools
 # Fedora
 sudo dnf install nss-tools
 ```
-
-Run `laraserve trust` again after installing the tool. These browser tools are separate from the MySQL support libraries LaraServe downloads automatically.
 
 </details>
 

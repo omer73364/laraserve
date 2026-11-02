@@ -198,7 +198,7 @@ Environment files are excluded by default, except `.env.example`. `--include-env
 
 ## 🔐 Local HTTPS & cleanup
 
-LaraServe binds the app to `127.0.0.1` by default. Host changes are prompted, recorded in its manifest, and reversible.
+LaraServe binds the app to `127.0.0.1` by default. Host changes are prompted, recorded in its manifest, and reversible. On supported Linux amd64 systems, missing browser NSS tools are downloaded privately, so Firefox trust does not require a manual `libnss3-tools` installation.
 
 | | Change | When | Undo |
 |---|---|---|---|
