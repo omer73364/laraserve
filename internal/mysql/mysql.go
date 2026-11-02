@@ -48,7 +48,7 @@ func (s *Server) Close() {
 }
 
 // Start never opens a TCP port or reads the machine's MySQL configuration.
-func Start(parent context.Context, base, stateDir string, env []string) (*Server, error) {
+func Start(parent context.Context, base, stateDir string, env []string, appNames ...string) (*Server, error) {
 	var err error
 	base, err = filepath.Abs(base)
 	if err != nil {
@@ -75,6 +75,14 @@ func Start(parent context.Context, base, stateDir string, env []string) (*Server
 			_ = os.Remove(lock)
 		}
 	}()
+	appName := "laraserve"
+	if len(appNames) > 0 {
+		appName = appNames[0]
+	}
+	databaseName, err := projectDatabaseName(stateDir, appName)
+	if err != nil {
+		return nil, err
+	}
 	password, err := projectPassword(filepath.Join(stateDir, "password"))
 	if err != nil {
 		return nil, err
@@ -159,17 +167,17 @@ func Start(parent context.Context, base, stateDir string, env []string) (*Server
 	}
 	// The socket directory is 0700. Only this OS user can access the local
 	// bootstrap root account; Laravel gets a separate database-scoped user.
-	sql := "CREATE DATABASE IF NOT EXISTS `laraserve` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n" +
+	sql := "CREATE DATABASE IF NOT EXISTS `" + databaseName + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n" +
 		"CREATE USER IF NOT EXISTS 'laraserve'@'localhost' IDENTIFIED BY '" + password + "';\n" +
 		"ALTER USER 'laraserve'@'localhost' IDENTIFIED BY '" + password + "';\n" +
-		"GRANT ALL PRIVILEGES ON `laraserve`.* TO 'laraserve'@'localhost';\n"
+		"GRANT ALL PRIVILEGES ON `" + databaseName + "`.* TO 'laraserve'@'localhost';\n"
 	if err := queryDatabase(readyCtx, base, socket, env, sql); err != nil {
 		s.Close()
 		return nil, fmt.Errorf("MySQL database setup failed: %w", err)
 	}
 	s.Env = map[string]string{
 		"DB_CONNECTION": "mysql", "DB_URL": "", "DB_HOST": "localhost", "DB_PORT": "3306",
-		"DB_SOCKET": socket, "DB_DATABASE": "laraserve", "DB_USERNAME": "laraserve", "DB_PASSWORD": password,
+		"DB_SOCKET": socket, "DB_DATABASE": databaseName, "DB_USERNAME": "laraserve", "DB_PASSWORD": password,
 	}
 	return s, nil
 }

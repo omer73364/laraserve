@@ -216,7 +216,7 @@ func cmdServe(args []string) error {
 		dbLifetime = ctx
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
-		db, err = mysql.Start(ctx, base, mysqlDataDir(filepath.Join(c.home.Root, "databases", id), selectedMySQL), baseEnv)
+		db, err = mysql.Start(ctx, base, mysqlDataDir(filepath.Join(c.home.Root, "databases", id), selectedMySQL), baseEnv, filepath.Base(abs))
 		if err != nil {
 			return err
 		}
@@ -232,7 +232,7 @@ func cmdServe(args []string) error {
 		for k, v := range db.Env {
 			cfg.AppEnv[k] = v
 		}
-		ui.OK("MySQL %s ready", selectedMySQL)
+		ui.OK("MySQL %s ready (database: %s)", selectedMySQL, db.Env["DB_DATABASE"])
 	}
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
 	if db != nil && *migrate {
