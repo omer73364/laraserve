@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"net/url"
@@ -26,6 +27,9 @@ func sourceOverride(kind string, source downloadSource) (downloadSource, error) 
 	u, err := url.Parse(source.URL)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"))) {
 		return source, fmt.Errorf("%s download URL must use HTTPS (HTTP is allowed for localhost mirrors)", kind)
+	}
+	if source.SHA256 == "publisher" {
+		return source, nil
 	}
 	b, err := hex.DecodeString(source.SHA256)
 	if err != nil || len(b) != 32 {
@@ -88,6 +92,16 @@ func installCache(root, key string, validate func(string) error, populate func(s
 }
 
 func downloadFile(source downloadSource, dst, label string) error {
+	h := sha256.New()
+	var verifier hash.Hash = h
+	expected := source.SHA256
+	if expected == "publisher" {
+		var err error
+		verifier, expected, err = publisherChecksum(source.URL)
+		if err != nil {
+			return fmt.Errorf("verify %s: %w", label, err)
+		}
+	}
 	ui.Info("Downloading %s (first use)", label)
 	resp, err := downloadClient.Get(source.URL)
 	if err != nil {
@@ -105,10 +119,9 @@ func downloadFile(source downloadSource, dst, label string) error {
 	if err != nil {
 		return err
 	}
-	h := sha256.New()
 	p := ui.NewProgress(label, resp.ContentLength)
 	defer p.Finish()
-	n, copyErr := io.Copy(io.MultiWriter(f, h, p), io.LimitReader(resp.Body, 2<<30))
+	n, copyErr := io.Copy(io.MultiWriter(f, verifier, p), io.LimitReader(resp.Body, 2<<30))
 	closeErr := f.Close()
 	if copyErr != nil {
 		return fmt.Errorf("download %s: %w", label, copyErr)
@@ -119,7 +132,7 @@ func downloadFile(source downloadSource, dst, label string) error {
 	if resp.ContentLength >= 0 && n != resp.ContentLength {
 		return fmt.Errorf("incomplete download of %s", label)
 	}
-	if hex.EncodeToString(h.Sum(nil)) != source.SHA256 {
+	if hex.EncodeToString(verifier.Sum(nil)) != expected {
 		return fmt.Errorf("checksum mismatch downloading %s; retry or check the configured source", label)
 	}
 	p.Finish()
