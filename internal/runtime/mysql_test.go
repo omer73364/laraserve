@@ -77,7 +77,7 @@ func TestMySQLArchiveExtraction(t *testing.T) {
 			}
 			if !test.bad {
 				st, err := os.Stat(filepath.Join(dir, test.name))
-				if err != nil || st.Mode()&0o111 == 0 {
+				if err != nil || (runtime.GOOS != "windows" && st.Mode()&0o111 == 0) {
 					t.Fatal("executable permissions lost")
 				}
 			}
@@ -86,6 +86,9 @@ func TestMySQLArchiveExtraction(t *testing.T) {
 }
 
 func TestDistributionLinkChain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix runtime symlinks; Windows distributions use ZIP")
+	}
 	var buf bytes.Buffer
 	gz := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gz)

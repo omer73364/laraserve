@@ -9,9 +9,12 @@ import (
 	"fmt"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"laraserve/internal/runtime"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -99,7 +102,11 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 	}()
 	socket := filepath.Join(sockets, "mysql.sock")
 	data := filepath.Join(stateDir, "data")
-	server := filepath.Join(base, "bin", "mysqld")
+	serverName := "mysqld"
+	if goruntime.GOOS == "windows" {
+		serverName += ".exe"
+	}
+	server := filepath.Join(base, "bin", serverName)
 	common := []string{"--no-defaults", "--basedir=" + base, "--datadir=" + data}
 	if os.Geteuid() == 0 {
 		common = append(common, "--user=root")
@@ -126,11 +133,53 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 		return nil, err
 	}
 	ctx, cancel := context.WithCancel(parent)
-	args := append(common, "--socket="+socket, "--pid-file="+filepath.Join(sockets, "mysql.pid"),
-		"--skip-networking", "--mysqlx=OFF", "--skip-log-bin", "--innodb-buffer-pool-size=64M")
+	args := append(common, "--pid-file="+filepath.Join(sockets, "mysql.pid"),
+		"--mysqlx=OFF", "--skip-log-bin", "--innodb-buffer-pool-size=64M")
+	queryEnv := env
+	dbHost, dbPort, dbSocket := "localhost", "3306", socket
+	if goruntime.GOOS == "windows" {
+		listener, err := net.Listen("tcp4", "127.0.0.1:0")
+		if err != nil {
+			cancel()
+			log.Close()
+			return nil, err
+		}
+		dbHost = "127.0.0.1"
+		dbPort = strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+		listener.Close()
+		dbSocket = ""
+		socket = "tcp:" + net.JoinHostPort(dbHost, dbPort)
+		rootPassword, err := projectPassword(filepath.Join(stateDir, "root-password"))
+		if err != nil {
+			cancel()
+			log.Close()
+			return nil, err
+		}
+		initFile := filepath.Join(stateDir, "root-init.sql")
+		if err = os.WriteFile(initFile, []byte("ALTER USER 'root'@'localhost' IDENTIFIED BY '"+rootPassword+"';\n"), 0600); err != nil {
+			cancel()
+			log.Close()
+			return nil, err
+		}
+		defer os.Remove(initFile)
+		queryEnv = append(append([]string{}, env...), "LARASERVE_MYSQL_ROOT_PASSWORD="+rootPassword)
+		args = append(args, "--console", "--bind-address=127.0.0.1", "--port="+dbPort, "--init-file="+filepath.ToSlash(initFile))
+	} else {
+		args = append(args, "--socket="+socket, "--skip-networking")
+	}
 	cmd := exec.CommandContext(ctx, server, args...)
 	cmd.Env, cmd.Stdout, cmd.Stderr = env, log, log
-	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
+	cmd.Cancel = func() error {
+		if goruntime.GOOS == "windows" {
+			shutdownCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+			defer stop()
+			if err := queryDatabase(shutdownCtx, base, socket, queryEnv, "SHUTDOWN;"); err == nil {
+				return nil
+			}
+			return cmd.Process.Kill()
+		}
+		return cmd.Process.Signal(syscall.SIGTERM)
+	}
 	cmd.WaitDelay = 30 * time.Second
 	if err := cmd.Start(); err != nil {
 		cancel()
@@ -150,7 +199,7 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 	defer readyCancel()
 	for {
 		probeCtx, probeCancel := context.WithTimeout(readyCtx, 2*time.Second)
-		err := queryDatabase(probeCtx, base, socket, env, "SELECT 1;\n")
+		err := queryDatabase(probeCtx, base, socket, queryEnv, "SELECT 1;\n")
 		probeCancel()
 		if err == nil {
 			break
@@ -171,13 +220,13 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 		"CREATE USER IF NOT EXISTS 'laraserve'@'localhost' IDENTIFIED BY '" + password + "';\n" +
 		"ALTER USER 'laraserve'@'localhost' IDENTIFIED BY '" + password + "';\n" +
 		"GRANT ALL PRIVILEGES ON `" + databaseName + "`.* TO 'laraserve'@'localhost';\n"
-	if err := queryDatabase(readyCtx, base, socket, env, sql); err != nil {
+	if err := queryDatabase(readyCtx, base, socket, queryEnv, sql); err != nil {
 		s.Close()
 		return nil, fmt.Errorf("MySQL database setup failed: %w", err)
 	}
 	s.Env = map[string]string{
-		"DB_CONNECTION": "mysql", "DB_URL": "", "DB_HOST": "localhost", "DB_PORT": "3306",
-		"DB_SOCKET": socket, "DB_DATABASE": databaseName, "DB_USERNAME": "laraserve", "DB_PASSWORD": password,
+		"DB_CONNECTION": "mysql", "DB_URL": "", "DB_HOST": dbHost, "DB_PORT": dbPort,
+		"DB_SOCKET": dbSocket, "DB_DATABASE": databaseName, "DB_USERNAME": "laraserve", "DB_PASSWORD": password,
 	}
 	return s, nil
 }
@@ -191,6 +240,15 @@ func query(ctx context.Context, base, socket string, env []string, statement str
 	cfg.User = "root"
 	cfg.Net = "unix"
 	cfg.Addr = socket
+	if strings.HasPrefix(socket, "tcp:") {
+		cfg.Net = "tcp"
+		cfg.Addr = strings.TrimPrefix(socket, "tcp:")
+		for _, entry := range env {
+			if strings.HasPrefix(entry, "LARASERVE_MYSQL_ROOT_PASSWORD=") {
+				cfg.Passwd = strings.TrimPrefix(entry, "LARASERVE_MYSQL_ROOT_PASSWORD=")
+			}
+		}
+	}
 	cfg.MultiStatements = true
 	cfg.Timeout = time.Second
 	cfg.ReadTimeout = 2 * time.Second

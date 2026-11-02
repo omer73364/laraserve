@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -29,7 +30,7 @@ func TestPrivateWorkspace(t *testing.T) {
 	}
 	for _, name := range []string{"config.inc.php", "laraserve-login.php"} {
 		st, err := os.Stat(filepath.Join(w.Root, name))
-		if err != nil || st.Mode().Perm() != 0o600 {
+		if err != nil || (runtime.GOOS != "windows" && st.Mode().Perm() != 0o600) {
 			t.Fatal("generated credential file is not private")
 		}
 		if php, err := exec.LookPath("php"); err == nil {

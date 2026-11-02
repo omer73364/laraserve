@@ -74,6 +74,13 @@ func Prepare(source, stateDir, baseURL string, db map[string]string) (*Workspace
 	if strings.HasPrefix(baseURL, "https://") {
 		secure = "true"
 	}
+	host, port := db["DB_HOST"], db["DB_PORT"]
+	if host == "" {
+		host = "localhost"
+	}
+	if port == "" {
+		port = "3306"
+	}
 	config := "<?php\n" +
 		"$cfg['blowfish_secret'] = " + phpString(token[:32]) + ";\n" +
 		"$cfg['PmaAbsoluteUri'] = " + phpString(baseURL+"/") + ";\n" +
@@ -85,7 +92,8 @@ func Prepare(source, stateDir, baseURL string, db map[string]string) (*Workspace
 		" 'SignonSession' => " + phpString(session) + ",\n" +
 		" 'SignonURL' => 'laraserve-login.php',\n" +
 		" 'LogoutURL' => 'laraserve-login.php',\n" +
-		" 'host' => 'localhost',\n" +
+		" 'host' => " + phpString(host) + ",\n" +
+		" 'port' => " + phpString(port) + ",\n" +
 		" 'socket' => " + phpString(db["DB_SOCKET"]) + ",\n" +
 		" 'only_db' => " + phpString(db["DB_DATABASE"]) + ",\n" +
 		" 'AllowNoPassword' => false,\n];\n"

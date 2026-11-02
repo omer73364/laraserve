@@ -18,9 +18,6 @@ func EnsureMySQL(runtimesDir string) (string, error) {
 func MySQLVersions() []string { return []string{"8.0.46", "8.4.13"} }
 
 func EnsureMySQLVersion(runtimesDir, version string) (string, error) {
-	if goruntime.GOOS == "windows" {
-		return "", fmt.Errorf("private MySQL currently supports Linux and macOS only")
-	}
 	if dir := os.Getenv("LARASERVE_MYSQL_DIR"); dir != "" {
 		abs, err := filepath.Abs(dir)
 		if err != nil {
@@ -31,10 +28,15 @@ func EnsureMySQLVersion(runtimesDir, version string) (string, error) {
 		}
 		return abs, prepareMySQL(abs, version)
 	}
-	if (goruntime.GOOS != "linux" || goruntime.GOARCH != "amd64") && os.Getenv("LARASERVE_MYSQL_URL") == "" {
-		return "", fmt.Errorf("automatic MySQL download is currently available for Linux amd64; set LARASERVE_MYSQL_DIR or LARASERVE_MYSQL_URL and LARASERVE_MYSQL_SHA256 for this platform")
+	if ((goruntime.GOOS != "linux" && goruntime.GOOS != "windows") || goruntime.GOARCH != "amd64") && os.Getenv("LARASERVE_MYSQL_URL") == "" {
+		return "", fmt.Errorf("automatic MySQL download is currently available for Linux amd64 and Windows amd64; set LARASERVE_MYSQL_DIR or LARASERVE_MYSQL_URL and LARASERVE_MYSQL_SHA256 for this platform")
 	}
 	sources := map[string]downloadSource{"8.0.46": {"https://cdn.mysql.com/Downloads/MySQL-8.0/mysql-8.0.46-linux-glibc2.17-x86_64-minimal.tar.xz", "publisher"}, "8.4.13": {"https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-linux-glibc2.28-x86_64-minimal.tar.xz", "publisher"}}
+	if goruntime.GOOS == "windows" {
+		for _, v := range MySQLVersions() {
+			sources[v] = downloadSource{"https://cdn.mysql.com/Downloads/MySQL-" + v[:3] + "/mysql-" + v + "-winx64.zip", "publisher"}
+		}
+	}
 	selected, ok := sources[version]
 	if !ok {
 		return "", fmt.Errorf("no MySQL download for %s", version)
@@ -48,7 +50,11 @@ func EnsureMySQLVersion(runtimesDir, version string) (string, error) {
 		if err := downloadFile(source, archive, "MySQL"); err != nil {
 			return err
 		}
-		if err := extractDistribution(archive, dir); err != nil {
+		extract := extractDistribution
+		if goruntime.GOOS == "windows" {
+			extract = func(archive, dir string) error { return extractZip(archive, dir, true) }
+		}
+		if err := extract(archive, dir); err != nil {
 			return err
 		}
 		if err := os.Remove(archive); err != nil {
@@ -95,7 +101,7 @@ func MySQLEnv(dir string, env []string) []string {
 }
 
 func verifyMySQL(dir, want string) error {
-	cmd := exec.Command(filepath.Join(dir, "bin", "mysqld"), "--version")
+	cmd := exec.Command(filepath.Join(dir, "bin", executableName("mysqld")), "--version")
 	cmd.Env = MySQLEnv(dir, os.Environ())
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -151,11 +157,11 @@ func mysqlLibrariesFrom(dir string, search []string) error {
 
 func validateMySQL(dir string) error {
 	for _, name := range []string{"mysqld", "mysql"} {
-		st, err := os.Stat(filepath.Join(dir, "bin", name))
+		st, err := os.Stat(filepath.Join(dir, "bin", executableName(name)))
 		if err != nil {
 			return fmt.Errorf("MySQL distribution needs bin/%s: %w", name, err)
 		}
-		if !st.Mode().IsRegular() || st.Mode()&0o111 == 0 {
+		if !st.Mode().IsRegular() || (goruntime.GOOS != "windows" && st.Mode()&0o111 == 0) {
 			return fmt.Errorf("MySQL bin/%s is not executable", name)
 		}
 	}
@@ -198,4 +204,11 @@ func mysqlLibraryHelp(output string) string {
 		hint = "Install libstdc++6 (Ubuntu/Debian), libstdc++ (Fedora/RHEL), or gcc-libs (Arch)."
 	}
 	return "\nMissing MySQL support library: " + library + ". " + hint + " Then rerun LaraServe; the cached runtime will be repaired without deleting database data. Use --mysql=false only if you already have an external database."
+}
+
+func executableName(name string) string {
+	if goruntime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
 }
