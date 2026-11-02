@@ -92,9 +92,9 @@ Do not delete database data to fix a library error. See [runtime compatibility](
 laraserve serve ./my-app --migrate
 ```
 
-Initial SQLite/private MySQL setup is marked ready only after migrations succeed. A failure stops startup and retries on the next run. Fix the reported application migration error before restarting.
+LaraServe does not run migrations automatically. A fresh managed database is empty until you explicitly migrate it. A migration failure stops that invocation and is not retried during normal startup.
 
-`--migrate` applies migrations added after the first successful setup. For a project's external database, use its normal migration workflow; LaraServe's managed connection is separate.
+`--migrate` explicitly applies pending migrations, including the initial schema. For a project's external database, use its normal migration workflow; LaraServe's managed connection is separate.
 
 ## 🕰️ Composer blocks Laravel 8 dependencies
 

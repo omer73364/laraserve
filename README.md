@@ -86,7 +86,7 @@ laraserve serve my-app --domain my-app.test
 # Work on a copy
 laraserve serve ./other-app --copy
 
-# Apply migrations added since the initial setup
+# Explicitly apply migrations (never run automatically)
 laraserve serve my-app --migrate
 
 # Choose a Laravel skeleton and PHP version

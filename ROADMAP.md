@@ -100,7 +100,7 @@ Completion target: cover more development workflows with clearly documented plat
 2. Bind the management dashboard to loopback, authenticate sessions, validate Host and Origin, and protect state-changing actions.
 3. Keep shareable project options in `.laraserve.json`. Keep credentials, machine paths, and process state private.
 4. Share services only when versions and server configuration are compatible. Keep isolation available.
-5. Protect data during cleanup, version changes, migration, and restore operations.
+5. Protect data during cleanup, version changes, migration, and restore operations. Never run schema migrations automatically; require an explicit user request, including for new databases.
 6. Download tools and services on demand; do not embed large runtime distributions in the client.
 7. Use measured resource consumption rather than estimates to choose defaults.
 8. Add database engines and services incrementally, with verification for each supported platform.
