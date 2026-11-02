@@ -87,6 +87,9 @@ func Extract(bundle, dst string) error {
 	defer zr.Close()
 	base := filepath.Clean(dst) + string(os.PathSeparator)
 	for _, zf := range zr.File {
+		if strings.ContainsAny(zf.Name, ":\\") || zf.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("unsafe path in bundle: %s", zf.Name)
+		}
 		target := filepath.Join(dst, filepath.FromSlash(zf.Name))
 		if !strings.HasPrefix(target, base) {
 			return fmt.Errorf("unsafe path in bundle: %s", zf.Name)

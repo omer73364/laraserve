@@ -22,7 +22,7 @@ func archiveName(name string, strip bool) (string, error) {
 		}
 	}
 	clean := path.Clean(name)
-	if path.IsAbs(name) || clean == ".." || strings.HasPrefix(clean, "../") || strings.Contains(name, "\\") {
+	if path.IsAbs(name) || clean == ".." || strings.HasPrefix(clean, "../") || strings.ContainsAny(name, ":\\") {
 		return "", fmt.Errorf("unsafe archive path %q", name)
 	}
 	if strip {
