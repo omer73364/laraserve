@@ -4,23 +4,23 @@
 
 ## 🦊 Firefox shows a certificate warning
 
-Fully close Firefox, reinstall local CA trust, then reopen the browser:
+Fully close Firefox, start your app normally, then reopen the browser:
 
 ```bash
-laraserve trust
+laraserve serve ./my-app
 ```
 
-Trust installation is retried even when LaraServe previously recorded the CA as installed. On Linux, existing Firefox NSS profiles are included; failed imports show their profile paths.
+After you approve trust once, normal HTTPS startup on Linux verifies browser certificate fingerprints and trust flags, repairs failed imports, and discovers new or reset Firefox profiles. It only asks for initial approval when no trust approval is recorded. `--no-trust` skips these operations. `laraserve trust` remains an optional explicit reinstall command.
 
 <details>
 <summary>🧰 The certutil command is missing</summary>
 
 On Linux amd64 with glibc 2.35+ (including Ubuntu 22.04/24.04), LaraServe
 reuses an installed `certutil` or automatically downloads a private, verified
-copy with matching NSS libraries. Close Firefox and run:
+copy with matching NSS libraries. Close Firefox and start your app again:
 
 ```bash
-laraserve trust
+laraserve serve ./my-app
 ```
 
 First use needs internet; later imports and removals reuse the cache offline.
@@ -123,3 +123,13 @@ First verify that no MySQL process is using that data directory. Only then remov
 | 🗂️ | Laravel 8 | Uses its own writable `storage/` directory; use `--copy` to preserve an untouched original. |
 | 📡 | LAN HTTPS | Each client device needs to trust the local CA. |
 | 🧳 | Offline bundles | Application bundles do not contain runtime downloads or managed database data. |
+
+## Private support report
+
+`laraserve doctor` inspects current state without downloading tools, running project code, installing certificates, or changing database schemas. Save a report with:
+
+```bash
+laraserve doctor --report report.json
+```
+
+The JSON contains the LaraServe version, OS/architecture, tool and project counts, and controlled health-check messages. It excludes paths, domains, environment variables, credentials, raw errors, configuration contents, and logs. It refuses to overwrite an existing file. Send or attach a report only when you choose to share it.

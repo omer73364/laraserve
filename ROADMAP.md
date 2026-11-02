@@ -1,6 +1,6 @@
 # LaraServe development roadmap
 
-Status: proposed roadmap, saved for future development. No implementation is implied by this document.
+Status: Phase 1 local foundation work started. See [the checkpoint record](docs/phase-1-checkpoint.md) for delivered work, test evidence, deferred checks, and restore points.
 
 Updated: 2026-11-02
 
@@ -12,11 +12,11 @@ This roadmap combines the current development priorities with ideas from [Omar's
 
 ## Phase 1: Dependable foundation
 
-- [ ] Finish automatic dependency repair and recovery from incomplete browser trust setup during normal startup.
-- [ ] Make startup stages, port conflicts, and failures clear, with actionable diagnostics and a support report that excludes secrets.
-- [ ] Add CI for builds, tests, and supported Linux environments.
-- [ ] Publish versioned, prebuilt releases with checksums and documented runtime sources.
-- [ ] Choose and add a license with the owner's approval.
+- [x] Finish automatic dependency repair and recovery from incomplete browser trust setup during normal startup.
+- [x] Make startup stages, port conflicts, and failures clear, with actionable diagnostics and a support report that excludes secrets.
+- [ ] Add CI for builds, tests, and supported Linux environments. An inactive Ubuntu 22.04/24.04 and Windows template is prepared; activation and hosted execution remain deferred by owner request.
+- [ ] Publish versioned, prebuilt releases with checksums and documented runtime sources. Local packaging and checksums are implemented; public publication remains deferred.
+- [x] Choose and add a license with the owner's approval (MIT).
 
 Completion target: a fresh supported Ubuntu installation can reliably start an app with minimal manual setup.
 

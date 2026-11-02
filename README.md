@@ -74,7 +74,7 @@ laraserve serve my-app --http
 | 🎛️ | `laraserve versions [path]` | Show selected and available runtime versions without downloading them. |
 | 📦 | `laraserve pack [path] -o app.laraserve` | Bundle an app with its dependencies and existing built assets. |
 | 🔐 | `laraserve trust` / `laraserve untrust` | Install or remove local CA trust. |
-| 🩺 | `laraserve doctor` | Inspect local setup. |
+| 🩺 | `laraserve doctor [--report FILE]` | Inspect local setup without downloads; optionally save a private support report. |
 | 🧽 | `laraserve clean [path]` | Remove recorded project state and managed project artifacts. |
 | 🗑️ | `laraserve uninstall` | Remove LaraServe-managed state and data after confirmation. |
 | 🏷️ | `laraserve version` | Print the client version. |
@@ -219,6 +219,7 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 | | Guide | Contents |
 |---|---|---|
 | ⚙️ | [Runtime & configuration](docs/runtime.md) | Version selection, all serve flags, data layout, mirrors, and runtime sources. |
+| 🛠️ | [Development & restore points](docs/development.md) | Local checks, release archives, phase checkpoints, and safe source rollback. |
 | 🔧 | [Troubleshooting & limits](docs/troubleshooting.md) | Firefox trust, missing libraries, migration failures, and platform gaps. |
 
 ## 🛠️ Development
@@ -226,9 +227,12 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 ```bash
 make build  # build bin/laraserve
 make test   # run the Go test suite
+make check  # run tests and static checks
 make dist   # cross-compile Linux, macOS and Windows clients
 ```
 
 Builds do not download or embed runtime executables. Local website source lives in [`website/dist/`](website/dist/).
 
-No license file is currently included in this repository.
+Licensed under the [MIT License](LICENSE). Downloaded PHP, MySQL, Caddy, and other tools retain their own licenses.
+
+Local release archives and checksums can be prepared with `make release VERSION=0.1.0-phase1.2`. This does not upload anything or run GitHub Actions. See [release and restore points](docs/development.md).

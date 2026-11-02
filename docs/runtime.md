@@ -200,3 +200,7 @@ Windows amd64 uses official PHP Windows NTS ZIP builds (7.4 and 8.0–8.5) and a
 Managed Windows MySQL uses an ephemeral IPv4 loopback TCP port, because Unix sockets are unavailable. A private generated root password is configured through an initialization file before startup readiness, and applications receive a separate database-scoped account. The initialization file is removed after startup. Shutdown requests use authenticated SQL before falling back to process termination. phpMyAdmin uses the same loopback host and port. External databases remain available with `--mysql=false`.
 
 Windows cache installation uses OS file locks. Custom hosts-file changes require an Administrator terminal; `.localhost` names avoid that requirement. CA trust uses Windows' current-user certificate store. See [Windows setup and verification](windows.md).
+
+### Automatic trust recovery
+
+After initial trust approval, Linux HTTPS startup verifies the CA certificate and NSS trust flags in discovered browser profiles. Missing, failed, or reset imports are retried automatically, using private cached tools if system NSS tools are absent. A missing or replaced recorded system anchor also triggers repair. Healthy anchors avoid another system installation. `--no-trust` skips repair and leaves existing trust records untouched, including when local certificate constraints change.
