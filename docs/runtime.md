@@ -116,6 +116,8 @@ Migrations never run automatically, including for a fresh SQLite or private MySQ
 
 Database detection reads `.env` (`DB_CONNECTION` / `DB_URL`) and standard defaults in `config/database.php`, without booting PHP. Dynamic custom configuration needs an explicit flag.
 
+New managed MySQL databases use the original app folder name (or bundle filename), normalized to lowercase letters, digits, and underscores: `example-app` becomes `example_app`. The selected name is saved in the private database state and reused on later starts. Domains do not determine the database name. Existing installations retain their `laraserve` database to preserve access to existing data; no automatic rename or data migration is performed.
+
 Managed MySQL injects a private connection without editing `.env`. It never imports an existing external or SQLite database. The runtime needs `pdo_mysql`; phpMyAdmin also needs `mysqli` and `mbstring`. An unexpected database exit stops the app and reports its log path.
 
 Every MySQL release has separate data. Switching versions does not upgrade, downgrade, or import databases. Data from older LaraServe builds remains accessible with its original MySQL 8.4.13 runtime.
