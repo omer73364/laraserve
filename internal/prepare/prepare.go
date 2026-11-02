@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"laraserve/internal/process"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -94,8 +95,8 @@ func Artisan(php, root string, env []string, args ...string) error {
 }
 
 func artisanContext(ctx context.Context, php, root string, env []string, args ...string) error {
-	full := append([]string{"php-cli", "artisan"}, args...)
-	cmd := exec.CommandContext(ctx, php, full...)
+	full := append([]string{"artisan"}, args...)
+	cmd := process.PHPContext(ctx, php, full...)
 	cmd.Dir, cmd.Env = root, env
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
@@ -122,7 +123,7 @@ func (s *State) EnsureMigrationsContext(ctx context.Context, php, root string, e
 // ComposerInstall runs `composer install` (needs network unless cached).
 func ComposerInstall(php, composerPhar, root string, env []string, allowInsecure ...bool) error {
 	env = composerPolicyEnv(env, allowInsecure)
-	cmd := exec.Command(php, "php-cli", composerPhar, "install",
+	cmd := process.PHP(php, composerPhar, "install",
 		"--no-interaction", "--prefer-dist", "--no-progress")
 	cmd.Dir = root
 	return runComposer(cmd, php, env)
@@ -133,7 +134,10 @@ func ComposerInstall(php, composerPhar, root string, env []string, allowInsecure
 // server subcommand. Keep the launcher private and alive until scripts finish.
 func runComposer(cmd *exec.Cmd, php string, env []string) error {
 	if runtime.GOOS == "windows" {
-		return fmt.Errorf("Composer scripts with downloaded FrankenPHP are not supported on Windows")
+		cmd.Env = append([]string{}, env...)
+		cmd.Env = append(cmd.Env, "PHP_BINARY="+php)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		return cmd.Run()
 	}
 	php, err := filepath.Abs(php)
 	if err != nil {
@@ -177,12 +181,12 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 // ComposerCreateProject scaffolds an app using the cached PHP and Composer.
 func ComposerCreateProject(php, composerPhar, root, version string, env []string, allowInsecure ...bool) error {
 	env = composerPolicyEnv(env, allowInsecure)
-	args := []string{"php-cli", composerPhar, "create-project",
+	args := []string{composerPhar, "create-project",
 		"--no-interaction", "--prefer-dist", "--no-progress", "--no-scripts", "--", "laravel/laravel", root}
 	if version != "" {
 		args = append(args, version)
 	}
-	cmd := exec.Command(php, args...)
+	cmd := process.PHP(php, args...)
 	if err := runComposer(cmd, php, env); err != nil {
 		return err
 	}

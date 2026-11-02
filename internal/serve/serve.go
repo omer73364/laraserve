@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"laraserve/internal/process"
 	"net"
 	"os"
 	"os/exec"
@@ -227,7 +228,7 @@ func Run(c Config, onReady func()) error {
 	} else {
 		cmd.Stdout, cmd.Stderr = logf, logf
 	}
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.Cancel = func() error { return process.Stop(cmd) }
 	cmd.WaitDelay = 5 * time.Second
 	if err := cmd.Start(); err != nil {
 		return err

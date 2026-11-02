@@ -3,9 +3,9 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"laraserve/internal/process"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 
@@ -206,7 +206,7 @@ func cmdDoctor() error {
 		ui.Warn("runtime: %v", err)
 	} else {
 		ui.OK("runtime: %s", rt.PHP)
-		if out, err := exec.Command(rt.PHP, "php-cli", "-v").Output(); err == nil {
+		if out, err := process.PHP(rt.PHP, "-v").Output(); err == nil {
 			ui.Info("%s", firstLine(string(out)))
 		}
 	}

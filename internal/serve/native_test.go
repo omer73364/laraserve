@@ -45,6 +45,16 @@ func TestRealNativePHPBackend(t *testing.T) {
 	if string(b) != "public-storage" {
 		t.Fatalf("public storage link failed: %s", b)
 	}
+	for _, path := range []string{"/%5c..%5c.env", "/..%5c.env"} {
+		response, err := http.Get(base + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusNotFound {
+			t.Fatalf("unsafe backslash path %s: HTTP %d", path, response.StatusCode)
+		}
+	}
 	req, _ := http.NewRequest("GET", base+"/index.php", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set("X-Forwarded-Host", "localhost:8443")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"laraserve/internal/process"
 	"net"
 	"os"
 	"os/exec"
@@ -34,7 +35,7 @@ func startNative(ctx context.Context, c Config, root string, log io.Writer, stop
  }
  $root = $_SERVER['DOCUMENT_ROOT'];
  $uri = rawurldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/');
- if (in_array('..', explode('/', $uri), true)) { http_response_code(404); return; }
+ if (strpos($uri, '\\') !== false || (DIRECTORY_SEPARATOR === '\\' && strpos($uri, ':') !== false) || in_array('..', explode('/', $uri), true)) { http_response_code(404); return; }
  $file = realpath($root . $uri);
  // Public storage links are intentionally allowed, just like Laravel's router.
  if ($file && is_file($file)) {
@@ -56,7 +57,7 @@ func startNative(ctx context.Context, c Config, root string, log io.Writer, stop
 	cmd.Env = c.Env
 	cmd.Stdout = log
 	cmd.Stderr = log
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.Cancel = func() error { return process.Stop(cmd) }
 	cmd.WaitDelay = 5 * time.Second
 	if err = cmd.Start(); err != nil {
 		os.Remove(path)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"laraserve/internal/process"
 	"net"
 	"os"
 	"os/exec"
@@ -206,7 +207,7 @@ func cmdServe(args []string) error {
 			return err
 		}
 		baseEnv := env.Build(rt, st.Dir, *hostPath, nil)
-		check := exec.Command(rt.PHP, "php-cli", "-r", "exit(extension_loaded('pdo_mysql') ? 0 : 1);")
+		check := process.PHP(rt.PHP, "-r", "exit(extension_loaded('pdo_mysql') ? 0 : 1);")
 		check.Env = baseEnv
 		if err := check.Run(); err != nil {
 			return fmt.Errorf("private MySQL requires pdo_mysql in the PHP runtime: %w", err)
@@ -256,7 +257,7 @@ func cmdServe(args []string) error {
 	}
 	var admin *phpmyadmin.Workspace
 	if db != nil && *adminF {
-		check := exec.Command(rt.PHP, "php-cli", "-r", "exit(extension_loaded('mysqli') && extension_loaded('mbstring') ? 0 : 1);")
+		check := process.PHP(rt.PHP, "-r", "exit(extension_loaded('mysqli') && extension_loaded('mbstring') ? 0 : 1);")
 		check.Env = cfg.Env
 		if err := check.Run(); err != nil {
 			return fmt.Errorf("phpMyAdmin needs mysqli and mbstring in the PHP runtime; use --phpmyadmin=false to serve without it: %w", err)
