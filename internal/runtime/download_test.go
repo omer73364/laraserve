@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,9 @@ func (f transportFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 func digest(b []byte) string                                              { sum := sha256.Sum256(b); return hex.EncodeToString(sum[:]) }
 
 func TestLazyDownloadsAndOfflineCache(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("Unix FrankenPHP fixture; Windows downloads covered by integration tests")
+	}
 	old := downloadClient
 	t.Cleanup(func() { downloadClient = old })
 	calls := map[string]int{}

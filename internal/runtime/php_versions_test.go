@@ -8,6 +8,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 )
@@ -34,6 +35,9 @@ func TestPHPCatalogMatchesSelectableVersions(t *testing.T) {
 }
 
 func TestLegacyLauncherSetsPrivatePaths(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("Unix executable permissions")
+	}
 	path := filepath.Join(t.TempDir(), "php-legacy")
 	script := "#!/bin/sh\nexit 0\n"
 	for i := 0; i < 2; i++ {

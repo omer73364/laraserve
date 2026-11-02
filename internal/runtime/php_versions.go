@@ -5,8 +5,8 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"laraserve/internal/process"
 	"os"
-	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strings"
@@ -16,6 +16,9 @@ import (
 var phpCatalogJSON []byte
 
 func PHPVersions() []string {
+	if goruntime.GOOS == "windows" {
+		return windowsPHPVersions()
+	}
 	if goruntime.GOOS != "linux" {
 		return []string{"8.5.12"}
 	}
@@ -27,6 +30,9 @@ func PHPVersions() []string {
 }
 
 func EnsurePHP(root, version string) (*Runtime, error) {
+	if goruntime.GOOS == "windows" {
+		return ensureWindowsPHP(root, version)
+	}
 	if version == "8.5.12" {
 		rt, err := Ensure(root)
 		if err != nil {
@@ -121,7 +127,7 @@ func EnsurePHP(root, version string) (*Runtime, error) {
 }
 
 func verifyPHP(rt *Runtime, want string) error {
-	cmd := exec.Command(rt.PHP, "php-cli", "-r", "echo PHP_VERSION;")
+	cmd := process.PHP(rt.PHP, "-r", "echo PHP_VERSION;")
 	cmd.Env = []string{"PHPRC=" + rt.INI, "PHP_INI_SCAN_DIR=", "PATH=" + rt.Dir}
 	out, err := cmd.CombinedOutput()
 	if err != nil {

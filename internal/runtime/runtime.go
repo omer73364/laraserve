@@ -51,7 +51,7 @@ func executable(path string) error {
 	if err != nil {
 		return err
 	}
-	if !st.Mode().IsRegular() || st.Mode()&0111 == 0 {
+	if !st.Mode().IsRegular() || (goruntime.GOOS != "windows" && st.Mode()&0111 == 0) {
 		return fmt.Errorf("%s is not executable", path)
 	}
 	return nil
@@ -59,6 +59,9 @@ func executable(path string) error {
 
 // Ensure downloads PHP once. Composer is deliberately deferred until needed.
 func Ensure(runtimesDir string) (*Runtime, error) {
+	if goruntime.GOOS == "windows" {
+		return ensureWindowsPHP(runtimesDir, "8.5.12")
+	}
 	if p := os.Getenv("LARASERVE_FRANKENPHP"); p != "" {
 		rt, err := fromOverride(p)
 		if err == nil {

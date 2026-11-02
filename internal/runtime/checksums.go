@@ -52,6 +52,20 @@ func publisherChecksum(raw string) (hash.Hash, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
+	case "www.php.net", "downloads.php.net":
+		b, e := checksumMetadata("https://www.php.net/~windows/releases/sha256sum.txt")
+		if e != nil {
+			return nil, "", e
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == path.Base(u.Path) {
+				sum = fields[0]
+				break
+			}
+		}
+	case "curl.se":
+		sum, err = checksumSidecar(raw+".sha256", 64)
 	case "getcomposer.org":
 		sum, err = checksumSidecar(raw+".sha256sum", 64)
 	case "files.phpmyadmin.net":

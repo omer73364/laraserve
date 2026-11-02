@@ -102,3 +102,43 @@ func TestLivePublisherMetadata(t *testing.T) {
 		})
 	}
 }
+
+func TestLiveWindowsDistributions(t *testing.T) {
+	if os.Getenv("LARASERVE_TEST_WINDOWS_ARCHIVES") != "1" {
+		t.Skip("opt-in official Windows ZIP verification, runnable on Linux")
+	}
+	for _, version := range []string{"7.4.33", "8.3.36", "8.5.12"} {
+		t.Run(version, func(t *testing.T) {
+			source, err := windowsPHPSource(version)
+			if err != nil {
+				t.Fatal(err)
+			}
+			root := t.TempDir()
+			archive := filepath.Join(root, "download.zip")
+			if err = downloadFile(source, archive, "Windows PHP "+version); err != nil {
+				t.Fatal(err)
+			}
+			target := filepath.Join(root, "php")
+			if err = extractZip(archive, target, false); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"php.exe", "ext/php_curl.dll", "ext/php_mysqli.dll", "ext/php_pdo_mysql.dll", "ext/php_pdo_sqlite.dll", "ext/php_openssl.dll"} {
+				if _, err = os.Stat(filepath.Join(target, filepath.FromSlash(name))); err != nil {
+					t.Fatal(err)
+				}
+			}
+			gd := "php_gd.dll"
+			if strings.HasPrefix(version, "7.4.") {
+				gd = "php_gd2.dll"
+			}
+			if _, err = os.Stat(filepath.Join(target, "ext", gd)); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for _, source := range []string{"https://github.com/caddyserver/caddy/releases/download/v2.11.7/caddy_2.11.7_windows_amd64.zip", "https://curl.se/ca/cacert.pem", "https://cdn.mysql.com/Downloads/MySQL-8.4/mysql-8.4.13-winx64.zip"} {
+		if _, _, err := publisherChecksum(source); err != nil {
+			t.Error(err)
+		}
+	}
+}
