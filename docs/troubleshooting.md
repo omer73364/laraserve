@@ -46,6 +46,26 @@ For a localhost session without certificate setup:
 laraserve serve ./my-app --http
 ```
 
+## 🔌 Port 443 is already in use
+
+Another web server may already own HTTPS port 443. LaraServe leaves that process
+running and chooses an alternate HTTPS port for a development domain when the
+conflict is detected. You can also choose one explicitly:
+
+```bash
+laraserve serve ./my-app --domain example-app.test --port 8443
+```
+
+Open the exact URL printed in the startup summary, including its port. An explicit
+occupied `--port` fails with an actionable error. A last-moment bind conflict is
+reported without announcing a successful startup; the full server log stays in
+the project's private `logs/server.log`.
+
+Startup readiness checks a private, random response from that particular launch;
+an unrelated service accepting TCP connections cannot trigger a ready message.
+Caddy's own trust installation is disabled explicitly. LaraServe manages its
+local CA through its normal prompts and `trust` command.
+
 ## 🧩 MySQL reports a missing shared library
 
 On Linux amd64, LaraServe automatically downloads missing **libaio** and **libnuma** into private runtime storage. It handles Ubuntu 24's renamed library and repairs cached runtimes on later starts. No manual system symlink is required.
