@@ -421,16 +421,19 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 	if regen {
 		ui.Info("Local CA regenerated to include: %s", strings.Join(ca.Permitted, ", "))
 	}
+	if noTrust {
+		ui.Warn("CA trust setup skipped (--no-trust): browsers may show a certificate warning")
+		return ca, c.man.Save()
+	}
 	if c.man.CA != nil && c.man.CA.SHA256 != ca.SHA256 {
 		if err := trust.Remove(c.man.CA); err != nil {
-			ui.Warn("could not remove the previous CA from the trust store: %v", err)
+			return nil, fmt.Errorf("cannot replace the previous CA trust entry: %w; retry with access to the trust store, or use --http", err)
 		}
 		c.man.CA = nil
 	}
+	wasApproved := c.man.CA != nil
 	if c.man.CA == nil || reinstall {
 		switch {
-		case noTrust:
-			ui.Warn("CA not installed (--no-trust): browsers will show a certificate warning")
 		case ui.Confirm("Install laraserve's local CA in the system trust store? (name-constrained to " +
 			strings.Join(ca.Permitted, ", ") + "; removable with `laraserve untrust`)"):
 			entry, err := trust.Install(ca)
@@ -457,6 +460,9 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 		default:
 			ui.Warn("CA not installed: browsers will show a certificate warning")
 		}
+	}
+	if wasApproved && !reinstall && c.man.CA != nil {
+		trust.Repair(ca, c.man.CA)
 	}
 	return ca, c.man.Save()
 }
