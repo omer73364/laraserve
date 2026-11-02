@@ -3,17 +3,13 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"laraserve/internal/process"
-	"net"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 
 	"laraserve/internal/detect"
 	"laraserve/internal/hosts"
 	"laraserve/internal/pack"
 	"laraserve/internal/paths"
-	"laraserve/internal/runtime"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
 )
@@ -189,59 +185,4 @@ func cmdUninstall(args []string) error {
 	}
 	ui.OK("Removed %s. laraserve left nothing behind.", c.home.Root)
 	return nil
-}
-
-func cmdDoctor() error {
-	c, err := load()
-	if err != nil {
-		return err
-	}
-	ui.Fields("Environment",
-		ui.Field{Label: "Platform", Value: goruntime.GOOS + "/" + goruntime.GOARCH},
-		ui.Field{Label: "Home", Value: c.home.Root},
-		ui.Field{Label: "Projects", Value: fmt.Sprint(len(c.man.Projects))},
-	)
-	ui.Section("Health checks")
-	if rt, err := runtime.Ensure(c.home.Runtimes()); err != nil {
-		ui.Warn("runtime: %v", err)
-	} else {
-		ui.OK("runtime: %s", rt.PHP)
-		if out, err := process.PHP(rt.PHP, "-v").Output(); err == nil {
-			ui.Info("%s", firstLine(string(out)))
-		}
-	}
-	if c.man.CA != nil {
-		ui.OK("local CA installed in the OS trust store (sha256 %s…)", c.man.CA.SHA256[:12])
-	} else {
-		ui.Warn("local CA is not installed (run `laraserve trust`)")
-	}
-	if len(c.man.Hosts) > 0 {
-		ui.OK("hosts entries (%s): %v", hosts.Path(), c.man.Hosts)
-	}
-	ui.Section("Local ports")
-	for _, p := range []string{"8443", "8080", "443"} {
-		if l, err := net.Listen("tcp", "127.0.0.1:"+p); err != nil {
-			ui.Info("port %s: not available (%v)", p, shortErr(err))
-		} else {
-			l.Close()
-			ui.Info("port %s: free", p)
-		}
-	}
-	return nil
-}
-
-func firstLine(s string) string {
-	for i, r := range s {
-		if r == '\n' {
-			return s[:i]
-		}
-	}
-	return s
-}
-
-func shortErr(err error) string {
-	if oe, ok := err.(*net.OpError); ok && oe.Err != nil {
-		return oe.Err.Error()
-	}
-	return err.Error()
 }

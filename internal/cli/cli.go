@@ -23,7 +23,7 @@ Usage:
   laraserve clean [path]         remove vendor/ (if laraserve made it), state, hosts entries
   laraserve uninstall            remove everything laraserve ever created
   laraserve versions [path]      show selected and available runtime versions
-  laraserve doctor | version
+  laraserve doctor [--report FILE] | version
 
 serve flags:
   --domain NAME      serve on NAME (e.g. testapp.test); default localhost
@@ -74,7 +74,7 @@ func Run(args []string) int {
 	case "uninstall":
 		err = cmdUninstall(args[1:])
 	case "doctor":
-		err = cmdDoctor()
+		err = cmdDoctor(args[1:]...)
 	case "version", "--version", "-v":
 		fmt.Println("laraserve", runtime.Version)
 	case "help", "--help", "-h":
