@@ -21,6 +21,7 @@ const usage = `laraserve %s - serve any Laravel app over HTTPS, with no PHP/Comp
 Usage:
   laraserve new <path> [--version CONSTRAINT] [--php-version V] [--host-path]
   laraserve serve [path|bundle.laraserve] [flags]
+  laraserve dashboard [--port N]  open the protected local management UI
   laraserve projects           list registered projects and their status
   laraserve start [path|name|ID] [serve flags]   start in the background
   laraserve stop [path|name|ID]                 stop its current owner
@@ -79,6 +80,8 @@ func Run(args []string) int {
 		defer release()
 	}
 	switch args[0] {
+	case "dashboard":
+		err = cmdDashboard(args[1:])
 	case "new":
 		err = cmdNew(args[1:])
 	case "versions":
