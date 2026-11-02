@@ -139,3 +139,9 @@ The JSON contains the LaraServe version, OS/architecture, tool and project count
 Use `laraserve status <path-or-ID>` and the private startup log printed by `start`. For first-time administrator prompts, use foreground `serve` once; background workers have no interactive input.
 
 A remembered busy port requires an explicit `--port` override. Duplicate owners are rejected; use `stop` or `restart` instead of deleting lock files. Known stale MySQL ownership is recovered after the previous owner exits; unknown legacy locks are preserved for verification. See [project lifecycle](projects.md).
+
+## Dashboard asks for its private link
+
+Open the complete link printed by `laraserve dashboard`, including its fragment. The browser removes that fragment after session setup. Restarting the command creates a new session, so an old browser tab may need the new link. Use the printed `127.0.0.1` address; aliases and forwarded Hosts are deliberately rejected. A port conflict can be resolved by omitting `--port` to select an available port.
+
+Dashboard actions use saved reusable settings and cannot answer privileged or dependency-consent prompts. Complete initial setup through `serve`, then use the dashboard. A pending download can outlive a dashboard wait; check status and Startup logs before trying another start. See [the dashboard guide](dashboard.md) for log and resource-counter limits.

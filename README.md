@@ -72,6 +72,7 @@ laraserve serve my-app --http
 | ▶️ | `laraserve serve [path]` | Serve the current project or another app. |
 | 🆕 | `laraserve new <path>` | Create an app in a new or empty directory. |
 | 🎛️ | `laraserve versions [path]` | Show selected and available runtime versions without downloading them. |
+| 🖥️ | `laraserve dashboard` | Open the protected local project dashboard. |
 | 🗂️ | `laraserve projects` | List registered apps and their status. |
 | ▶️ | `laraserve start [path/name/ID]` | Run a project in the background. |
 | ⏹️ | `laraserve stop [path/name/ID]` | Stop only that project’s owner. |
@@ -242,3 +243,5 @@ Builds do not download or embed runtime executables. Local website source lives 
 Licensed under the [MIT License](LICENSE). Downloaded PHP, MySQL, Caddy, and other tools retain their own licenses.
 
 Local release archives and checksums can be prepared with `make release VERSION=0.1.0-phase1.2`. This does not upload anything or run GitHub Actions. See [release and restore points](docs/development.md).
+
+Manage registered projects, inspect recent logs, and view measured Linux CPU/RAM with `laraserve dashboard`. See the [dashboard guide](docs/dashboard.md) for access details and platform limits.
