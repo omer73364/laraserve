@@ -9,7 +9,7 @@ jobs:
   unit:
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        os: [ubuntu-22.04, ubuntu-24.04, windows-2022]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
       - run: go build -buildvcs=false -o bin/laraserve${{ runner.os == 'Windows' && '.exe' || '' }} .
       - uses: actions/upload-artifact@v4
         with:
-          name: laraserve-${{ runner.os }}-amd64
+          name: laraserve-${{ matrix.os }}-amd64
           path: bin/laraserve*
   windows-integration:
     runs-on: windows-2022
