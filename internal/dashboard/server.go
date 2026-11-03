@@ -115,7 +115,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) error {
 	defer r.Body.Close()
-	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 128<<10))
 	d.DisallowUnknownFields()
 	if err := d.Decode(v); err != nil {
 		return err
@@ -130,6 +130,9 @@ func respond(w http.ResponseWriter, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
+	if s.globalTools(w, r) {
+		return
+	}
 	if r.Method == "GET" && r.URL.Path == "/api/session" {
 		respond(w, map[string]string{"csrf": s.csrf})
 		return
@@ -181,6 +184,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	p, err := projects.New(s.home).Load(parts[0])
 	if err != nil {
 		http.Error(w, "project not found", 404)
+		return
+	}
+	if s.projectTools(w, r, p, parts[1]) {
 		return
 	}
 	if r.Method == "GET" && parts[1] == "logs" {
