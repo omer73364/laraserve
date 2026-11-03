@@ -25,6 +25,18 @@ func publisherChecksum(raw string) (hash.Hash, string, error) {
 	}
 	var sum string
 	switch u.Hostname() {
+	case "nodejs.org":
+		b, e := checksumMetadata(nodeChecksumURL(raw))
+		if e != nil {
+			return nil, "", e
+		}
+		for _, line := range strings.Split(string(b), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 2 && strings.TrimPrefix(fields[1], "*") == path.Base(u.Path) {
+				sum = fields[0]
+				break
+			}
+		}
 	case "github.com":
 		p := strings.Split(strings.Trim(u.Path, "/"), "/")
 		if len(p) != 6 || p[2] != "releases" || p[3] != "download" {
