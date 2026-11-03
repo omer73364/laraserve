@@ -32,6 +32,7 @@ import (
 	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/serve"
+	"laraserve/internal/statefile"
 	"laraserve/internal/supervisor"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
@@ -393,10 +394,21 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		}
 		ui.OK("MySQL %s ready (database: %s)", selectedMySQL, db.Env["DB_DATABASE"])
 	}
+	development, err := prepareDevelopment(c.home.Runtimes(), configDoc.Config, &cfg, rt)
+	if err != nil {
+		return err
+	}
+	defer development.Close()
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
+	development.env = cfg.Env
 	ownerState, snapshotErr := supervisor.Status(c.home.Root, registryID)
 	if snapshotErr != nil {
 		return snapshotErr
+	}
+	development.status.Generation = ownerState.Generation
+	development.statusFile = filepath.Join(st.Dir, "services.json")
+	if err := statefile.WriteJSON(development.statusFile, development.status); err != nil {
+		return err
 	}
 	if snapshotErr = projecttools.SaveExecution(c.home.Root, registryID, projecttools.Execution{Generation: ownerState.Generation, Root: root, StateDir: st.Dir, Runtime: *rt, Env: cfg.Env}); snapshotErr != nil {
 		return snapshotErr
@@ -484,7 +496,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		return err
 	}
 	// ---- 10. serve ----
-	err = supervisor.RunServices(session.Context(), []supervisor.Service{supervisor.ServiceFunc{Label: "application", Execute: func(ctx context.Context, ready func()) error {
+	services := append(development.services, supervisor.ServiceFunc{Label: "application", Execute: func(ctx context.Context, ready func()) error {
 		application := cfg
 		lifetime, cancel := context.WithCancel(ctx)
 		defer cancel()
@@ -492,7 +504,8 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		defer stop()
 		application.Context = lifetime
 		return serve.Run(application, ready)
-	}}}, func() {
+	}})
+	err = supervisor.RunServices(cfg.Context, services, func() {
 		if err := session.Ready(cfg.URL()); err != nil {
 			ui.Warn("Could not record project readiness: %v", err)
 		}
@@ -517,6 +530,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			{Label: "PHP", Value: selectedPHP},
 			{Label: "Database", Value: database},
 		}
+		fields = append(fields, development.fields...)
 		if data != "" {
 			fields = append(fields, ui.Field{Label: "Database data", Value: data})
 		}

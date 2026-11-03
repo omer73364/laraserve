@@ -21,6 +21,7 @@ import (
 )
 
 type Config struct {
+	Services    Services          `json:"services,omitempty"`
 	PHP         string            `json:"php,omitempty"`
 	MySQL       string            `json:"mysql,omitempty"`
 	Node        string            `json:"node,omitempty"`
@@ -31,6 +32,16 @@ type Config struct {
 	PHPMyAdmin  *bool             `json:"phpmyadmin,omitempty"`
 	PHPSettings map[string]string `json:"php_settings,omitempty"`
 	PHPRaw      string            `json:"php_ini,omitempty"`
+}
+
+// Services are opt-in: starting an existing app never installs dependencies or
+// consumes queued jobs unless the user has enabled the corresponding service.
+type Services struct {
+	Vite      bool `json:"vite,omitempty"`
+	Queue     bool `json:"queue,omitempty"`
+	Scheduler bool `json:"scheduler,omitempty"`
+	Redis     bool `json:"redis,omitempty"`
+	Mailpit   bool `json:"mailpit,omitempty"`
 }
 type Document struct {
 	Config   Config `json:"config"`
