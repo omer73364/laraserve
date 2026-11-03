@@ -92,7 +92,7 @@ Do not delete database data to fix a library error. See [runtime compatibility](
 laraserve serve ./my-app --migrate
 ```
 
-LaraServe does not run migrations automatically. A fresh managed database is empty until you explicitly migrate it. A migration failure stops that invocation and is not retried during normal startup.
+For an existing project, a fresh managed database stays empty until you explicitly migrate it. New app creation may apply the initial migrations by default; this does not enable migration during later starts. A migration failure stops that invocation and is not retried during normal startup.
 
 `--migrate` explicitly applies pending migrations, including the initial schema. For a project's external database, use its normal migration workflow; LaraServe's managed connection is separate.
 

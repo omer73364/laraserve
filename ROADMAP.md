@@ -1,6 +1,6 @@
 # LaraServe development roadmap
 
-Status: Phase 3 local dashboard is ready for its tested checkpoint. See [Phase 1](docs/phase-1-checkpoint.md), [Phase 2](docs/phase-2-checkpoint.md), and [Phase 3](docs/phase-3-checkpoint.md) for evidence, limits, and restore points.
+Status: Phase 4 project tools are ready for their tested local checkpoint. See [Phase 4](docs/phase-4-checkpoint.md) and earlier checkpoint documents for evidence, limits, and restore points.
 
 Updated: 2026-11-03
 
@@ -42,12 +42,12 @@ Completion target: manage existing projects comfortably from the browser.
 
 ## Phase 4: Project settings and actions
 
-- [ ] Configure domain, HTTPS, PHP version, database mode, and service options per project.
-- [ ] Provide common PHP settings as form fields, with a validated raw configuration editor where appropriate.
-- [ ] Run Artisan and Composer actions with live output and clear exit status.
-- [ ] Integrate Laravel's creation wizard, starter kit choices, and database choices.
-- [ ] Add a safe environment editor with masked secrets and comparison against `.env.example`.
-- [ ] Manage installed runtime versions, downloads, and unused cache removal.
+- [x] Configure domain, HTTPS, PHP version, database mode, and service options per project.
+- [x] Provide common PHP settings as form fields, with a validated raw configuration editor where appropriate.
+- [x] Run Artisan and Composer actions with live output and clear exit status.
+- [x] Integrate the terminal Laravel creation wizard (SQLite), official starter packages, and built-in database choices.
+- [x] Add a safe environment editor with masked secrets and comparison against `.env.example`.
+- [x] Manage installed runtime versions, downloads, and unused cache removal.
 
 Completion target: configure and operate projects through either interface.
 
@@ -101,7 +101,7 @@ Completion target: cover more development workflows with clearly documented plat
 2. Bind the management dashboard to loopback, authenticate sessions, validate Host and Origin, and protect state-changing actions.
 3. Keep shareable project options in `.laraserve.json`. Keep credentials, machine paths, and process state private.
 4. Share services only when versions and server configuration are compatible. Keep isolation available.
-5. Protect data during cleanup, version changes, migration, and restore operations. Never run schema migrations automatically; require an explicit user request, including for new databases.
+5. Protect data during cleanup, version changes, migration, and restore operations. Initial migrations are allowed during new project creation. Existing projects, including newly provisioned databases for them, require an explicit migration action; ordinary start/restart never replay migrations.
 6. Download tools and services on demand; do not embed large runtime distributions in the client.
 7. Use measured resource consumption rather than estimates to choose defaults.
 8. Add database engines and services incrementally, with verification for each supported platform.
@@ -120,4 +120,4 @@ The phases describe sequencing, not release dates. Revisit priorities when imple
 
 ## Recommended next milestone
 
-Build Phase 4 on the tested dashboard and lifecycle core: shared project configuration, validated settings, and deliberate project actions. Hosted CI activation and public release publication remain separately deferred.
+Build Phase 5 on the tested project tools: optional Node and package-manager selection, Vite, then additional development services. Hosted CI activation and public release publication remain separately deferred.

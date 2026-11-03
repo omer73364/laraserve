@@ -22,7 +22,7 @@ control/<id>.json           private owner generation and control credentials
 control/<id>-startup.log    private preparation and server output
 ```
 
-The project ID follows its canonical source path. Symlink aliases share an ID; names alone are not unique. Moving a project to a different path is not an automatic data migration. Shareable project configuration remains a later roadmap item; these machine-specific registration records should not be committed to an app's Git repository.
+The project ID follows its canonical source path. Symlink aliases share an ID; names alone are not unique. Moving a project to a different path is not an automatic data migration. Shareable options now live in `.laraserve.json`; these machine-specific registration records should not be committed to an app's Git repository. See [project tools](project-tools.md).
 
 Existing direct project footprints are imported when listing or managing projects. Their old private state IDs are retained so SQLite and MySQL data are not silently replaced. Duplicate legacy states for the same canonical folder stop startup and require deliberate resolution. Older private workspaces lack a recorded source path, so register them by serving the original source/bundle again rather than treating an internal workspace as a new project.
 

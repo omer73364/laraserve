@@ -110,7 +110,7 @@ LaraServe detects an app through `artisan` and `laravel/framework` in `composer.
 
 Modern Laravel apps receive private storage and cache paths through environment variables. Missing `APP_KEY` and SQLite setup are prepared in private state. Missing dependencies add `vendor/` to the project. Laravel 8 uses its own writable `storage/`; use `--copy` for an untouched original.
 
-Migrations never run automatically, including for a fresh SQLite or private MySQL database. Use `serve --migrate` to explicitly apply pending migrations. A failure stops that invocation; normal startup does not retry it. New projects are created with Composer scripts disabled to prevent Laravel creation hooks from migrating; LaraServe copies `.env.example` to `.env` when needed, and supplies a private application key during serving. Other creation hooks are skipped too.
+Existing projects never invoke migrations automatically, including when provisioning a fresh private database for them. Use `serve --migrate` or a confirmed Artisan task to apply them. New project creation is the exception: the built-in creator applies initial migrations to the new private database by default (`--migrate=false` opts out), and the native `--wizard` follows the installer setup before preparing the private schema. Existing private state at the same destination blocks creation rather than applying a new app's schema to retained data. See [project tools](project-tools.md).
 
 ## 🗄️ Database behavior
 

@@ -2,7 +2,7 @@
 
 ## Phase-by-phase work
 
-The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-3-dashboard`. Earlier phases remain available at their own checkpoints.
+The roadmap lives in [ROADMAP.md](../ROADMAP.md). Each phase should have acceptance criteria, focused commits, recorded verification, and a restore point. Current work is on `codex/phase-4-project-tools`. Earlier phases remain available at their own checkpoints.
 
 The baseline before Phase 1 is the annotated tag `restore/before-phase-1-2026-11-02`. These are source-code restore points; databases and private runtime state are separate and are not stored in Git.
 
@@ -91,3 +91,11 @@ go test ./integration -run TestRealDashboardLifecycle -v -timeout 3m
 ```
 
 Use the built client, not a `go run` wrapper: detached workers must be able to reopen the same executable. The dashboard assets are embedded directly from `internal/dashboard/assets`; no Node build or external CDN is required. `node --check internal/dashboard/assets/app.js` optionally verifies script syntax when Node is available.
+
+## Phase 4 checkpoint
+
+See [Phase 4](phase-4-checkpoint.md) for the verification record and [project tools](project-tools.md) for behavior/limits. Restore source at `restore/phase-4-local-ready`, or clone `dist/checkpoints/phase-4.bundle` with branch `codex/phase-4-project-tools`.
+
+The existing opt-in `TestRealDashboardLifecycle` now also checks settings/INI, masked environment edits, task output/exit status/cancellation, and explicit migrations. The real network creation checks use disposable destinations, a private `LARASERVE_HOME`, and a known `LARASERVE_FRANKENPHP`; run `new`, verify private SQLite schema, then serve, add a pending migration and restart to verify it remains unapplied. The native `--wizard` test needs actual terminal stdin (not a heredoc) and Composer access to official packages.
+
+Task workers reopen the built executable through `__project-task`; terminal and dashboard both use this core. `execution/<project-id>.json`, task requests/logs and history backups are private and may contain credentials or application secrets. Never include them in a source backup or support report.

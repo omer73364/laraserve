@@ -16,7 +16,7 @@ Existing registered projects appear with their state, local URL, PHP version, da
 
 Actions run asynchronously; project cards show progress and failures. A second dashboard action for that project is rejected while its first action is pending. The shared supervisor also prevents duplicate owners across the terminal and other dashboard sessions.
 
-Migrations, blanket yes-to-all permission, and one-shot insecure dependency consent are never replayed. The dashboard accepts no shell commands, extra launch flags, migration requests, or arbitrary filesystem paths. Use the terminal for a first run that requires interactive trust or dependency consent, and for changing options until Phase 4.
+Migrations, blanket yes-to-all permission, and one-shot insecure dependency consent are never replayed. Phase 4 adds validated settings, masked environment editing, deliberate Artisan/Composer tasks, and new-app creation. Known schema-changing actions require explicit confirmation for existing apps; initial migrations are allowed when creating a new app. No shell commands or arbitrary-file editing endpoints are exposed. Use the terminal for initial setup that needs interactive trust or dependency consent. See [project tools](project-tools.md).
 
 The page refreshes project status every three seconds while visible. Operation progress belongs to this dashboard process; actual project ownership remains independently queryable after the dashboard exits. A preparation timeout ends the dashboard's wait, not a detached project's lifetime. Check status and startup logs before starting it again.
 
