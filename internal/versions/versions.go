@@ -16,7 +16,7 @@ import (
 )
 
 type Pins struct {
-	Node string `json:"node,omitempty"`
+	Node  string `json:"node,omitempty"`
 	PHP   string `json:"php,omitempty"`
 	MySQL string `json:"mysql,omitempty"`
 }
