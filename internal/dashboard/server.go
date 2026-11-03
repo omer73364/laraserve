@@ -108,7 +108,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch r.URL.Path {
-	case "/", "/app.js", "/style.css":
+	case "/", "/app.js", "/style.css", "/logo.svg":
 	default:
 		http.NotFound(w, r)
 		return

@@ -17,7 +17,7 @@ function card(p) {
  const usage = p.resources.available ? `<span>CPU ${p.resources.cpu_percent == null ? 'sampling…' : p.resources.cpu_percent.toFixed(1) + '%'}</span><span>RAM ${bytes(p.resources.rss_bytes)}</span>` : `<span>${escape(p.health)}</span>`;
  let open = '';
  try { const u = new URL(p.url); if (['http:','https:'].includes(u.protocol) && !u.username && !u.password && p.status === 'running') open = `<a class="button open" href="${escape(u.href)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`; } catch {}
- return `<article class="project-card" data-project="${p.id}"><div class="card-body"><div class="card-top"><span class="app-icon">${escape(p.name.slice(0,1).toUpperCase())}</span><div class="card-title"><h3 title="${escape(p.name)}">${escape(p.name)}</h3><div class="project-url">${escape(p.url || 'Ready when you are')}</div></div><span class="badge ${escape(p.status)}">${escape(p.status)}</span></div><div class="runtime-row"><span class="runtime"><b>PHP</b> ${escape(p.php || 'Not selected')}</span><span class="runtime">${escape(p.database || 'Database not selected')}</span></div><div class="resource" title="${escape(p.resources.note || p.health)}">${usage}</div>${p.services?.length ? `<div class="runtime-row">${p.services.map(s=>`<span class="runtime">${escape(s.name)} · ${escape(s.state)}</span>`).join('')}</div>` : ''}<div class="path" title="${escape(p.source)}">${escape(p.source)}</div></div>${p.error || p.operation?.error ? `<div class="card-error">${escape(p.error || p.operation.error)}</div>` : ''}<div class="card-actions"><button class="button primary" data-action="${active?'stop':'start'}" data-id="${p.id}"${busy}>${pending ? 'Working…' : active ? '■ Stop' : '▷ Start'}</button>${active ? `<button class="button" data-action="restart" data-id="${p.id}"${busy}>↻ Restart</button>` : ''}<button class="button" data-logs="${p.id}">Logs</button><button class="button" data-settings="${p.id}">Settings</button>${open}</div></article>`;
+ return `<article class="project-card" data-project="${p.id}"><div class="card-body"><div class="card-top"><span class="app-icon">${escape(p.name.slice(0,1).toUpperCase())}</span><div class="card-title"><h3 title="${escape(p.name)}">${escape(p.name)}</h3><div class="project-url">${escape(p.url || 'Ready when you are')}</div></div><span class="badge ${escape(p.status)}">${escape(p.status)}</span></div><div class="runtime-row"><span class="runtime"><b>PHP</b> ${escape(p.php || 'Not selected')}</span><span class="runtime">${escape(p.database || 'Database not selected')}</span></div><div class="resource" title="${escape(p.resources.note || p.health)}">${usage}</div>${p.services?.length ? `<div class="runtime-row">${p.services.map(s=>`<span class="service-state ${escape(s.state)}"><span class="service-dot" aria-hidden="true"></span>${escape(s.name)}<span>${escape(s.state)}</span></span>`).join('')}</div>` : ''}<div class="path" title="${escape(p.source)}">${escape(p.source)}</div></div>${p.error || p.operation?.error ? `<div class="card-error">${escape(p.error || p.operation.error)}</div>` : ''}<div class="card-actions"><button class="button primary" data-action="${active?'stop':'start'}" data-id="${p.id}"${busy}>${pending ? 'Working…' : active ? '■ Stop' : '▷ Start'}</button>${active ? `<button class="button" data-action="restart" data-id="${p.id}"${busy}>↻ Restart</button>` : ''}<button class="button" data-logs="${p.id}">Logs</button><button class="button" data-settings="${p.id}">Settings</button>${open}</div></article>`;
 }
 function syncCards(shown) {
  const list = $('project-list');
@@ -57,7 +57,8 @@ function syncCards(shown) {
 }
 function render() {
  const query = $('project-search').value.toLowerCase();
- const shown = projects.filter(p => `${p.name} ${p.source} ${p.url}`.toLowerCase().includes(query));
+ const status = $('project-status').value;
+ const shown = projects.filter(p => `${p.name} ${p.source} ${p.url}`.toLowerCase().includes(query) && (status === 'all' || (status === 'attention' ? ['failed','crashed','unresponsive'].includes(p.status) : p.status === status)));
  syncCards(shown);
  $('total').textContent = $('project-count').textContent = $('nav-count').textContent = projects.length;
  $('running').textContent = projects.filter(p => p.status === 'running').length;
@@ -103,6 +104,7 @@ $('project-list').addEventListener('click',async event=>{
 });
 $('refresh').addEventListener('click',refresh);
 $('project-search').addEventListener('input',render);
+$('project-status').addEventListener('change',render);
 $('log-project').addEventListener('change',loadLogs);
 $('log-source').addEventListener('change',loadLogs);
 $('refresh-logs').addEventListener('click',loadLogs);
@@ -125,7 +127,7 @@ const phpFields=['memory_limit','max_execution_time','upload_max_filesize','post
 function post(path, body) {return request(path,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});}
 async function loadCatalog(){catalog=await request('/api/catalog');for(const kind of ['php','mysql'])$(kind+'-versions').innerHTML=catalog[kind].map(version=>`<option value="${escape(version)}"></option>`).join('');runtimeVersions();const previous=sessionStorage.getItem('laraserve-task');if(previous&&/^[a-f0-9]{12}$/.test(previous)&&!currentTask)watchTask(previous);}
 function toolNotice(text){$('tools-notice').textContent=text;}
-function showTab(name){for(const tab of ['settings','environment','actions'])$(tab==='actions'?'action-form':tab+'-form').hidden=tab!==name;document.querySelectorAll('[data-tool-tab]').forEach(button=>button.classList.toggle('selected',button.dataset.toolTab===name));}
+function showTab(name){for(const tab of ['settings','environment','actions'])$(tab==='actions'?'action-form':tab+'-form').hidden=tab!==name;document.querySelectorAll('[data-tool-tab]').forEach(button=>{const selected=button.dataset.toolTab===name;button.classList.toggle('selected',selected);button.setAttribute('aria-pressed',String(selected));});}
 async function openTools(id){
  toolProject=id;configDocument=undefined;environmentDocument=undefined;const p=projects.find(p=>p.id===id);$('tools-title').textContent=p?.name||'Project';$('project-tools').hidden=false;toolNotice('Loading settings…');showTab('settings');
  try{

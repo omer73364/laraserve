@@ -43,3 +43,9 @@ The dashboard binds only to IPv4 loopback, requires an exact Host, rejects forei
 Project data requires authentication. Actions additionally require an exact same-origin request and a session CSRF header. The browser never receives per-project control tokens, control addresses, or saved launch arguments. The content security policy allows only bundled local scripts/styles and same-origin connections. No telemetry is sent.
 
 Loopback HTTP does not install another CA. This protects against unsolicited web origins, not another program running as your OS user, a privileged local process, or someone who obtains the private bootstrap link. There is deliberately no LAN binding or remote dashboard mode.
+
+## Dashboard appearance
+
+The embedded dashboard uses the README's LaraServe logo, charcoal surfaces and lime accent. Assets remain bundled locally with no fonts or scripts fetched from third parties. Project cards distinguish service states with both text and colored indicators. Combine the status selector (all, running, stopped, needs attention) with project search; workspace totals continue to cover all registered projects.
+
+Settings, environment and actions retain their existing behavior, with larger controls, visible selection and keyboard focus. Layouts adapt to narrow screens, including service options and log controls. Logs refresh explicitly as before; project status continues to refresh every three seconds.
