@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -116,15 +115,7 @@ func prepareDevelopment(cache string, c projectconfig.Config, cfg *serve.Config,
 		return devservice.Command{Label: name, Executable: executable, Args: args, Root: cfg.Root, Log: filepath.Join(cfg.StateDir, "logs", name+".log")}
 	}
 	if c.Services.Redis {
-		binary := os.Getenv("LARASERVE_REDIS")
-		if binary == "" {
-			var err error
-			binary, err = exec.LookPath("redis-server")
-			if err != nil {
-				return nil, fmt.Errorf("Redis is enabled but redis-server is unavailable; install Redis or set LARASERVE_REDIS to its executable")
-			}
-		}
-		binary, err := filepath.Abs(binary)
+		binary, err := runtime.EnsureRedis(cfg.Context, cache)
 		if err != nil {
 			return nil, err
 		}
@@ -209,11 +200,13 @@ func prepareDevelopment(cache string, c projectconfig.Config, cfg *serve.Config,
 		_, port, _ := net.SplitHostPort(address)
 		n, _ := strconv.Atoi(port)
 		server := map[string]any{"host": "127.0.0.1", "port": n, "strictPort": true, "cors": map[string]any{"origin": cfg.URL()}, "hmr": map[string]any{"host": cfg.Domain, "port": n}}
+		server["allowedHosts"] = []string{cfg.Domain}
 		scheme := "http"
 		if cfg.HTTPS {
 			scheme = "https"
 			server["https"] = map[string]string{"cert": cfg.Cert, "key": cfg.Key}
 		}
+		server["origin"] = scheme + "://" + net.JoinHostPort(cfg.Domain, port)
 		options, _ := json.Marshal(map[string]any{"root": cfg.Root, "server": server})
 		launcher := []byte("import {pathToFileURL} from 'node:url'; import {readFileSync} from 'node:fs';\nconst {createServer}=await import(pathToFileURL(process.argv[2]).href);\nconst options=" + string(options) + ";\nif(options.server.https){for(const k of ['cert','key']) options.server.https[k]=readFileSync(options.server.https[k]);}\nconst server=await createServer(options); await server.listen(); server.printUrls();\nfor(const signal of ['SIGINT','SIGTERM']) process.on(signal,async()=>{await server.close();process.exit(0);});\n")
 		file := filepath.Join(cfg.StateDir, "vite.mjs")
