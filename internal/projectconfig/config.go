@@ -23,6 +23,7 @@ import (
 type Config struct {
 	PHP         string            `json:"php,omitempty"`
 	MySQL       string            `json:"mysql,omitempty"`
+	Node        string            `json:"node,omitempty"`
 	Domain      string            `json:"domain,omitempty"`
 	HTTPS       *bool             `json:"https,omitempty"`
 	Port        *int              `json:"port,omitempty"`
@@ -75,7 +76,7 @@ func (c Config) Validate() error {
 	if c.Port != nil && (*c.Port < 0 || *c.Port > 65535) {
 		return fmt.Errorf("port must be 0 through 65535")
 	}
-	for _, v := range []string{c.PHP, c.MySQL} {
+	for _, v := range []string{c.PHP, c.MySQL, c.Node} {
 		if len(v) > 96 || (v != "latest" && !pin.MatchString(v)) {
 			return fmt.Errorf("invalid runtime version constraint")
 		}
