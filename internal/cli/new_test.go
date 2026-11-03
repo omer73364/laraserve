@@ -48,7 +48,7 @@ func TestNewUsesBundledComposer(t *testing.T) {
 			t.Setenv("LARASERVE_HOME", filepath.Join(dir, "home"))
 			t.Setenv("LARASERVE_FRANKENPHP", php)
 			target := filepath.Join(dir, "my app")
-			err := cmdNew([]string{target, "--version", "^12.0"})
+			err := cmdNew([]string{target, "--version", "^12.0", "--migrate=false"})
 			if (err != nil) != fail {
 				t.Fatalf("unexpected result: %v", err)
 			}
