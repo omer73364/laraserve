@@ -113,3 +113,7 @@ The dashboard offers catalog downloads, installed-cache sizes and deliberate rem
 Cleanup rechecks all project/task owners, recorded runtime references, and download locks. Referenced versions and shared Composer/NSS/library/platform-helper caches are protected. A project without an execution snapshot conservatively protects caches until it has been started with this version. Missing, incomplete, symlinked-root or unknown cache directories are not removal candidates. Cache removal does not touch project files, history, SQLite, or MySQL data. A removed unused runtime can be downloaded again later.
 
 Windows source/tests cross-compile. Native Windows execution and platform-specific wizard behavior remain unverified; existing macOS process/resource limitations still apply.
+
+## Optional development services
+
+Node pins and the `services` object can be edited in project settings. See [development services](development-services.md) for Node/npm commands, Vite, Redis, Mailpit, queue and scheduler behavior, and the boundaries for non-npm managers.
