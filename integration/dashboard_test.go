@@ -21,7 +21,9 @@ import (
 
 	"laraserve/internal/dashboard"
 	"laraserve/internal/paths"
+	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/supervisor"
 )
 
@@ -36,7 +38,7 @@ func TestRealDashboardLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	files := map[string]string{"composer.json": `{"require":{"php":"^8.5","laravel/framework":"^12.0"}}`, "vendor/autoload.php": "<?php", "artisan": "<?php file_put_contents(__DIR__.'/unexpected-migration', 'called'); exit(17);", "public/index.php": "<?php echo 'dashboard-real-app';", "storage/logs/laravel.log": "INFO normal\nERROR dashboard marker <script>\n"}
+	files := map[string]string{".env": "APP_NAME=Original\nDB_PASSWORD=very-secret\n", ".env.example": "APP_NAME=Example\nDB_PASSWORD=example-secret\nNEW_VARIABLE=default\n", "composer.json": `{"require":{"php":"^8.5","laravel/framework":"^12.0"}}`, "vendor/autoload.php": "<?php", "artisan": `<?php $cmd=$argv[1]??""; if($cmd==="migrate"){file_put_contents(__DIR__."/unexpected-migration","explicit");echo "migration requested";exit(0);} if($cmd==="fail"){echo "deliberate failure";exit(7);} if($cmd==="slow"){echo "started slow task\n";flush();sleep(20);exit(0);} echo json_encode(["memory"=>ini_get("memory_limit"),"database"=>getenv("DB_DATABASE")]);`, "public/index.php": "<?php if(isset($_GET['memory'])){echo ini_get('memory_limit');return;} echo 'dashboard-real-app';", "storage/logs/laravel.log": "INFO normal\nERROR dashboard marker <script>\n"}
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
 			t.Fatal(err)
@@ -208,6 +210,126 @@ func TestRealDashboardLifecycle(t *testing.T) {
 	if _, err = os.Stat(filepath.Join(root, "unexpected-migration")); !os.IsNotExist(err) {
 		t.Fatal("dashboard replayed a migration", err)
 	}
+
+	// Phase 4: edit configuration and masked environment through the same session.
+	response = request("GET", "/api/projects/"+p.ID+"/settings", "", "")
+	var config projectconfig.Document
+	if err = json.NewDecoder(response.Body).Decode(&config); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	plain := false
+	config.Config = projectconfig.Config{PHP: "8.5", HTTPS: &plain, Database: "sqlite", PHPSettings: map[string]string{"memory_limit": "192M"}}
+	encoded, _ := json.Marshal(config)
+	response = request("POST", "/api/projects/"+p.ID+"/settings", string(encoded), csrf)
+	if response.StatusCode != 200 {
+		b, _ := io.ReadAll(response.Body)
+		t.Fatal(response.StatusCode, string(b))
+	}
+	response.Body.Close()
+	response = request("POST", "/api/projects/"+p.ID+"/settings", string(encoded), csrf)
+	response.Body.Close()
+	if response.StatusCode != 409 {
+		t.Fatal("stale settings accepted")
+	}
+	action("restart")
+	updated := await("running")
+	response, err = client.Get(updated.URL + "/?memory=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if string(b) != "192M" {
+		t.Fatal("PHP override not applied", string(b))
+	}
+	response = request("GET", "/api/projects/"+p.ID+"/environment", "", "")
+	b, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if strings.Contains(string(b), "very-secret") || strings.Contains(string(b), "example-secret") {
+		t.Fatal("environment secret leaked")
+	}
+	var environment projectconfig.Environment
+	if err = json.Unmarshal(b, &environment); err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ = json.Marshal(map[string]any{"revision": environment.Revision, "changes": map[string]string{"APP_NAME": "Updated app"}})
+	response = request("POST", "/api/projects/"+p.ID+"/environment", string(encoded), csrf)
+	if response.StatusCode != 200 {
+		b, _ := io.ReadAll(response.Body)
+		t.Fatal(string(b))
+	}
+	response.Body.Close()
+	b, _ = os.ReadFile(filepath.Join(root, ".env"))
+	if !strings.Contains(string(b), "DB_PASSWORD=very-secret") || !strings.Contains(string(b), "Updated app") {
+		t.Fatal("environment preservation failed", string(b))
+	}
+	runTask := func(command string, confirm bool) projecttools.Task {
+		t.Helper()
+		data, _ := json.Marshal(projecttools.TaskRequest{Kind: "artisan", Args: []string{command}, ConfirmSchema: confirm})
+		r := request("POST", "/api/projects/"+p.ID+"/tasks", string(data), csrf)
+		defer r.Body.Close()
+		if r.StatusCode != 200 {
+			b, _ := io.ReadAll(r.Body)
+			t.Fatal(r.StatusCode, string(b))
+		}
+		var task projecttools.Task
+		if e := json.NewDecoder(r.Body).Decode(&task); e != nil {
+			t.Fatal(e)
+		}
+		return task
+	}
+	awaitTask := func(id string) projecttools.Task {
+		t.Helper()
+		deadline := time.Now().Add(30 * time.Second)
+		for time.Now().Before(deadline) {
+			r := request("GET", "/api/tasks/"+id, "", "")
+			var task projecttools.Task
+			e := json.NewDecoder(r.Body).Decode(&task)
+			r.Body.Close()
+			if e != nil {
+				t.Fatal(e)
+			}
+			if task.Status != "queued" && task.Status != "running" {
+				return task
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		t.Fatal("task timed out")
+		return projecttools.Task{}
+	}
+	task := awaitTask(runTask("about", false).ID)
+	if task.Status != "succeeded" || task.ExitCode != 0 || !strings.Contains(task.Output, "192M") {
+		t.Fatal(task)
+	}
+	data, _ := json.Marshal(projecttools.TaskRequest{Kind: "artisan", Args: []string{"migrate"}})
+	response = request("POST", "/api/projects/"+p.ID+"/tasks", string(data), csrf)
+	response.Body.Close()
+	if response.StatusCode != 400 {
+		t.Fatal("migration did not require consent")
+	}
+	task = awaitTask(runTask("migrate", true).ID)
+	if task.ExitCode != 0 {
+		t.Fatal(task)
+	}
+	if b, e := os.ReadFile(filepath.Join(root, "unexpected-migration")); e != nil || string(b) != "explicit" {
+		t.Fatal("explicit migration did not run", e)
+	}
+	task = awaitTask(runTask("fail", false).ID)
+	if task.ExitCode != 7 || !strings.Contains(task.Output, "deliberate failure") {
+		t.Fatal(task)
+	}
+	slow := runTask("slow", false)
+	time.Sleep(300 * time.Millisecond)
+	response = request("POST", "/api/tasks/"+slow.ID+"/cancel", "{}", csrf)
+	response.Body.Close()
+	task = awaitTask(slow.ID)
+	if task.Status == "succeeded" {
+		t.Fatal("cancelled task succeeded", task)
+	}
+	if state, e := supervisor.Status(home, p.ID); e != nil || state.Status != "running" {
+		t.Fatal("task cancellation stopped app", state, e)
+	}
 	action("stop")
 	await("stopped")
 	action("start")
@@ -223,5 +345,5 @@ func TestRealDashboardLifecycle(t *testing.T) {
 	if err != nil || state.Status != "running" {
 		t.Fatal("dashboard exit stopped app", state, err)
 	}
-	t.Log("Real dashboard authentication, start, readiness, log search, measured resources, stable restart, no migrations, stop, and independent project lifetime passed")
+	t.Log("Real dashboard lifecycle, settings/INI, masked environment, task output/exit/cancellation, explicit migrations, and independent project lifetime passed")
 }
