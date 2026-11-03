@@ -2,7 +2,6 @@ package devservice
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"laraserve/internal/projectconfig"
@@ -27,23 +26,17 @@ func ReadStatus(stateDir, generation, owner string) []Status {
 	if json.Unmarshal(b, &snapshot) != nil {
 		return nil
 	}
+	if snapshot.Generation != generation {
+		return nil
+	}
 	for i := range snapshot.Services {
-		if snapshot.Generation != generation || (owner != "running" && owner != "starting") {
-			snapshot.Services[i].State = "stopped"
-			if owner == "crashed" || owner == "failed" {
-				snapshot.Services[i].State = owner
-			}
+		switch owner {
+		case "running", "starting":
+		case "stopped", "stopping", "crashed", "failed":
+			snapshot.Services[i].State = owner
+		default:
+			snapshot.Services[i].State = "unknown"
 		}
 	}
 	return snapshot.Services
-}
-
-// RemoveHotFile only removes the Vite marker written by this process's URL.
-// Laravel must not keep referencing a development server after a normal stop.
-func RemoveHotFile(root, url string) {
-	file := filepath.Join(root, "public", "hot")
-	b, err := projectconfig.ReadRegular(file, 4096)
-	if err == nil && string(b) == url {
-		_ = os.Remove(file)
-	}
 }

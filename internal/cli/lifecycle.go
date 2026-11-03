@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"laraserve/internal/devservice"
+	"laraserve/internal/manifest"
 	"laraserve/internal/paths"
 	"laraserve/internal/projects"
 	"laraserve/internal/supervisor"
@@ -68,6 +70,13 @@ func cmdStatus(args []string) error {
 		return err
 	}
 	ui.Fields(p.Name, ui.Field{Label: "ID", Value: p.ID}, ui.Field{Label: "State", Value: state.Status}, ui.Field{Label: "Local", Value: state.URL}, ui.Field{Label: "PHP", Value: orDash(p.PHP)}, ui.Field{Label: "Database", Value: orDash(p.Database)}, ui.Field{Label: "Project", Value: p.Source})
+	if history, e := manifest.Load(home.Manifest()); e == nil {
+		if id, e := projectStateID(history, p.Root, p.Root != p.Source); e == nil {
+			for _, service := range devservice.ReadStatus(filepath.Join(home.Projects(), id), state.Generation, state.Status) {
+				ui.Fields("Development service", ui.Field{Label: service.Name, Value: service.State})
+			}
+		}
+	}
 	return nil
 }
 func cmdStop(args []string) error {
