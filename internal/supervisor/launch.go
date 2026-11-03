@@ -15,10 +15,11 @@ import (
 )
 
 type LaunchRequest struct {
-	Home    string
-	Project projects.Project
-	Args    []string
-	Restart bool
+	Home     string
+	Project  projects.Project
+	Args     []string
+	Restart  bool
+	Explicit []string
 }
 
 type LaunchResult struct {
@@ -78,6 +79,7 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 	cmd := exec.Command(executable, append([]string{"__background-serve"}, args...)...)
 	cmd.Stdout, cmd.Stderr = log, log
 	cmd.Env = workerEnv(home, generation)
+	cmd.Env = append(cmd.Env, "LARASERVE_SETTINGS_REPLAY=1", "LARASERVE_EXPLICIT_FLAGS="+strings.Join(request.Explicit, ","))
 	detach(cmd)
 	if err = cmd.Start(); err != nil {
 		return LaunchResult{}, err
@@ -116,7 +118,7 @@ func workerEnv(home, generation string) []string {
 	var result []string
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
-		if strings.EqualFold(name, "LARASERVE_HOME") || strings.EqualFold(name, "LARASERVE_START_ID") {
+		if strings.EqualFold(name, "LARASERVE_HOME") || strings.EqualFold(name, "LARASERVE_START_ID") || strings.EqualFold(name, "LARASERVE_SETTINGS_REPLAY") || strings.EqualFold(name, "LARASERVE_EXPLICIT_FLAGS") {
 			continue
 		}
 		result = append(result, entry)

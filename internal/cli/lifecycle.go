@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -143,7 +144,9 @@ func cmdStart(args []string, restart bool) error {
 	ui.Info("Starting %s in the background", filepath.Base(source))
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	result, err := supervisor.Launch(ctx, supervisor.LaunchRequest{Home: home.Root, Project: planned, Args: launchArgs, Restart: restart})
+	var explicit []string
+	options.fs.Visit(func(f *flag.Flag) { explicit = append(explicit, f.Name) })
+	result, err := supervisor.Launch(ctx, supervisor.LaunchRequest{Home: home.Root, Project: planned, Args: launchArgs, Restart: restart, Explicit: explicit})
 	if errors.Is(err, context.DeadlineExceeded) && result.State.Status == "starting" {
 		ui.Info("Still preparing; check `laraserve status %s` and %s", result.State.ID, result.LogPath)
 		return nil
