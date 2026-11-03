@@ -12,6 +12,7 @@ import (
 
 	"laraserve/internal/manifest"
 	"laraserve/internal/paths"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 )
@@ -19,8 +20,13 @@ import (
 const usage = `laraserve %s - serve any Laravel app over HTTPS, with no PHP/Composer installed
 
 Usage:
-  laraserve new <path> [--version CONSTRAINT] [--php-version V] [--host-path]
+  laraserve new <path> [--wizard | --starter KIT] [--database TYPE] [--migrate=false]
   laraserve serve [path|bundle.laraserve] [flags]
+  laraserve settings [project] [--file config.json]
+  laraserve env [project] [--file changes.json]
+  laraserve artisan|composer [project] [--confirm-schema] -- command [args]
+  laraserve task ID [--wait | --cancel]
+  laraserve runtimes [list | install php|mysql VERSION | remove KEY --confirm]
   laraserve dashboard [--port N]  open the protected local management UI
   laraserve projects           list registered projects and their status
   laraserve start [path|name|ID] [serve flags]   start in the background
@@ -80,6 +86,27 @@ func Run(args []string) int {
 		defer release()
 	}
 	switch args[0] {
+	case "__project-task":
+		if len(args) != 2 {
+			err = fmt.Errorf("invalid task invocation")
+		} else {
+			home, e := paths.New()
+			if e != nil {
+				err = e
+			} else {
+				err = projecttools.RunTaskWorker(home.Root, args[1])
+			}
+		}
+	case "task":
+		err = cmdTask(args[1:])
+	case "settings":
+		err = cmdSettings(args[1:])
+	case "env":
+		err = cmdEnvironment(args[1:])
+	case "artisan", "composer":
+		err = cmdProjectTask(args[1:], args[0])
+	case "runtimes":
+		err = cmdRuntimes(args[1:])
 	case "dashboard":
 		err = cmdDashboard(args[1:])
 	case "new":
