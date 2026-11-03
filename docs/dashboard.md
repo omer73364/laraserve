@@ -12,9 +12,9 @@ Existing registered projects appear with their state, local URL, PHP version, da
 - **Stop** contacts that project's authenticated owner and waits for its resources to stop.
 - **Restart** stops the current owner and launches a new generation with its saved settings.
 - **Open app** opens a running app in a separate browser tab.
-- **Logs** selects the project in the log viewer.
+- **Logs** opens the selected project’s log viewer.
 
-Actions run asynchronously; project cards show progress and failures. A second dashboard action for that project is rejected while its first action is pending. The shared supervisor also prevents duplicate owners across the terminal and other dashboard sessions.
+Actions run asynchronously; project rows and the project header show progress and failures. A second dashboard action for that project is rejected while its first action is pending. The shared supervisor also prevents duplicate owners across the terminal and other dashboard sessions.
 
 Migrations, blanket yes-to-all permission, and one-shot insecure dependency consent are never replayed. Phase 4 adds validated settings, masked environment editing, deliberate Artisan/Composer tasks, and new-app creation. Known schema-changing actions require explicit confirmation for existing apps; initial migrations are allowed when creating a new app. No shell commands or arbitrary-file editing endpoints are exposed. Use the terminal for initial setup that needs interactive trust or dependency consent. See [project tools](project-tools.md).
 
@@ -22,7 +22,7 @@ The page refreshes project status every three seconds while visible. Operation p
 
 ## Logs
 
-Choose Laravel, Web server + PHP, MySQL, or Startup, then enter a case-insensitive literal search. Refresh logs explicitly when needed. PHP and web server output share one stream. Search covers the recent tail, not the full historical file.
+Open a project and select its **Logs** tab. Choose Laravel, Web server + PHP, MySQL, a development service, or Startup, then enter a case-insensitive literal search. Refresh logs explicitly when needed. PHP and web server output share one stream. Search covers the recent tail, not the full historical file.
 
 Reads are capped at 256 KiB per request. Laravel includes up to eight recently modified `.log` files directly under `storage/logs`, sharing that budget; the viewer indicates truncation. Managed MySQL reads the project's selected version's log and preserves the old 8.4.13 directory layout where present. External database logs are not collected. Empty or missing streams show no output.
 
@@ -44,8 +44,12 @@ Project data requires authentication. Actions additionally require an exact same
 
 Loopback HTTP does not install another CA. This protects against unsolicited web origins, not another program running as your OS user, a privileged local process, or someone who obtains the private bootstrap link. There is deliberately no LAN binding or remote dashboard mode.
 
-## Dashboard appearance
+## Workspace layout and appearance
 
-The embedded dashboard uses the README's LaraServe logo, charcoal surfaces and lime accent. Assets remain bundled locally with no fonts or scripts fetched from third parties. Project cards distinguish service states with both text and colored indicators. Combine the status selector (all, running, stopped, needs attention) with project search; workspace totals continue to cover all registered projects.
+The Projects directory lists apps in rows with their stack, recent service state, status, and lifecycle controls. Search by name/folder and filter by status; totals cover the entire workspace. Open a project for its own Overview, Configuration, Environment, Commands, and Logs sections. A project switcher and browser back/forward navigation keep the workspace easy to navigate.
 
-Settings, environment and actions retain their existing behavior, with larger controls, visible selection and keyboard focus. Layouts adapt to narrow screens, including service options and log controls. Logs refresh explicitly as before; project status continues to refresh every three seconds.
+Configuration is divided into Connection, Runtimes & database, PHP configuration, and Development services. The form saves all categories together. Drafts survive switching categories or sections within the same project. Leaving that project with unsaved configuration or environment changes asks before discarding them; browser reload/close also warns. Save controls wait for the current revision to load and prevent repeated submissions while saving. A save does not restart the app.
+
+Commands includes shortcuts that only fill the form. The explicit Run action button starts the task. Activity displays the latest task and supports hiding/reopening output and cancelling an active task. It is not a full historical task browser. App creation and runtime management have dedicated workspace pages.
+
+Light is the default appearance, with Dark and System options in the header. The browser remembers the selection locally; a non-sensitive appearance cookie carries it across dashboard ports on the same host. Both palettes use the README's LaraServe logo and lime accent. All scripts, styles, and images remain bundled with no external fonts or assets. Layouts adapt to narrow screens and include visible keyboard focus.
