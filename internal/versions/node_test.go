@@ -38,6 +38,11 @@ func TestNodeRequirements(t *testing.T) {
 	if err != nil || got != "22.22.0" {
 		t.Fatal(got, err)
 	}
+	put(".laraserve.json", `{"node":"lts/*"}`)
+	got, err = ProjectNode(root, available, "", "")
+	if err != nil || got != "24.10.0" {
+		t.Fatal(got, err)
+	}
 }
 func TestPackageManagerConflicts(t *testing.T) {
 	root := t.TempDir()

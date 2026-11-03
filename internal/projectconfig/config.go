@@ -87,10 +87,13 @@ func (c Config) Validate() error {
 	if c.Port != nil && (*c.Port < 0 || *c.Port > 65535) {
 		return fmt.Errorf("port must be 0 through 65535")
 	}
-	for _, v := range []string{c.PHP, c.MySQL, c.Node} {
+	for _, v := range []string{c.PHP, c.MySQL} {
 		if len(v) > 96 || (v != "latest" && !pin.MatchString(v)) {
 			return fmt.Errorf("invalid runtime version constraint")
 		}
+	}
+	if len(c.Node) > 96 || (c.Node != "latest" && c.Node != "node" && c.Node != "lts/*" && !pin.MatchString(c.Node)) {
+		return fmt.Errorf("invalid Node version constraint")
 	}
 	switch c.Database {
 	case "", "auto", "managed", "external", "sqlite":
