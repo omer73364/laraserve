@@ -1,6 +1,6 @@
 # LaraServe development roadmap
 
-Status: Phase 4 project tools are ready for their tested local checkpoint. See [Phase 4](docs/phase-4-checkpoint.md) and earlier checkpoint documents for evidence, limits, and restore points.
+Status: Phase 5 development services are ready for their tested local checkpoint. See [Phase 5](docs/phase-5-checkpoint.md) and earlier checkpoint documents for evidence, limits, and restore points.
 
 Updated: 2026-11-03
 
@@ -53,11 +53,11 @@ Completion target: configure and operate projects through either interface.
 
 ## Phase 5: Complete Laravel workflow
 
-- [ ] Download Node optionally and select a version from project requirements.
-- [ ] Detect the project's package manager and manage Vite startup and output.
-- [ ] Add optional Redis and Mailpit services.
-- [ ] Manage queue workers and the scheduler with visible status and logs.
-- [ ] Start and stop the project's selected services together.
+- [x] Download Node optionally and select a version from project requirements.
+- [x] Detect the project's package manager and manage Vite startup and output.
+- [x] Add optional Redis and Mailpit services.
+- [x] Manage queue workers and the scheduler with visible status and logs.
+- [x] Start and stop the project's selected services together.
 
 Completion target: one project start can launch the services a typical Laravel application needs.
 
@@ -120,4 +120,4 @@ The phases describe sequencing, not release dates. Revisit priorities when imple
 
 ## Recommended next milestone
 
-Build Phase 5 on the tested project tools: optional Node and package-manager selection, Vite, then additional development services. Hosted CI activation and public release publication remain separately deferred.
+Phase 5 is locally implemented; see [its checkpoint](docs/phase-5-checkpoint.md) and [service behavior and limits](docs/development-services.md). Next is Phase 6: measure database costs before adding shared instances and database operations. Hosted CI activation and public release publication remain separately deferred.

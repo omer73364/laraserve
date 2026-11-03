@@ -99,3 +99,9 @@ See [Phase 4](phase-4-checkpoint.md) for the verification record and [project to
 The existing opt-in `TestRealDashboardLifecycle` now also checks settings/INI, masked environment edits, task output/exit status/cancellation, and explicit migrations. The real network creation checks use disposable destinations, a private `LARASERVE_HOME`, and a known `LARASERVE_FRANKENPHP`; run `new`, verify private SQLite schema, then serve, add a pending migration and restart to verify it remains unapplied. The native `--wizard` test needs actual terminal stdin (not a heredoc) and Composer access to official packages.
 
 Task workers reopen the built executable through `__project-task`; terminal and dashboard both use this core. `execution/<project-id>.json`, task requests/logs and history backups are private and may contain credentials or application secrets. Never include them in a source backup or support report.
+
+## Phase 5 checkpoint
+
+See [Phase 5](phase-5-checkpoint.md) and [development services](development-services.md). Restore source at `restore/phase-5-local-ready`, or clone `dist/checkpoints/phase-5.bundle` with branch `codex/phase-5-development-services`.
+
+The opt-in `TestRealDevelopmentWorkerLifecycle` uses the same client/PHP environment variables as the other lifecycle tests and checks worker readiness, output, failure propagation, restart and stop. Actual Node, Vite, Redis and Mailpit download/network checks use an isolated temporary `LARASERVE_HOME`; no payload is embedded or added to source history.
