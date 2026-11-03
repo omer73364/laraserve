@@ -26,6 +26,7 @@ Usage:
   laraserve env [project] [--file changes.json]
   laraserve artisan|composer [project] [--confirm-schema] -- command [args]
   laraserve task ID [--wait | --cancel]
+  laraserve node|npm [path] -- command [args]   use project-selected Node
   laraserve runtimes [list | install php|mysql VERSION | remove KEY --confirm]
   laraserve dashboard [--port N]  open the protected local management UI
   laraserve projects           list registered projects and their status
@@ -97,6 +98,8 @@ func Run(args []string) int {
 				err = projecttools.RunTaskWorker(home.Root, args[1])
 			}
 		}
+	case "node", "npm":
+		err = cmdNode(args[1:], args[0] == "npm")
 	case "task":
 		err = cmdTask(args[1:])
 	case "settings":
