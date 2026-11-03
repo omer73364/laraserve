@@ -14,6 +14,9 @@ import (
 )
 
 func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
+	if s.workspaceTools(w, r) {
+		return true
+	}
 	switch r.URL.Path {
 	case "/api/catalog":
 		if r.Method != "GET" {
