@@ -27,7 +27,9 @@ import (
 	"laraserve/internal/paths"
 	"laraserve/internal/phpmyadmin"
 	"laraserve/internal/prepare"
+	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/serve"
 	"laraserve/internal/supervisor"
@@ -138,6 +140,9 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			preparation()
 		}
 	}()
+	if err := projecttools.RequireNoTasks(h.Root, registryID); err != nil {
+		return err
+	}
 	c, err := load()
 	if err != nil {
 		return err
@@ -169,6 +174,39 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		return err
 	}
 
+	configDoc, err := projectconfig.Read(root)
+	if err != nil {
+		return err
+	}
+	actual := explicit
+	if os.Getenv("LARASERVE_SETTINGS_REPLAY") == "1" {
+		actual = map[string]bool{}
+		for _, name := range strings.Split(os.Getenv("LARASERVE_EXPLICIT_FLAGS"), ",") {
+			if name != "" {
+				actual[name] = true
+			}
+		}
+	}
+	defaults := configDoc.Config
+	if !actual["domain"] && defaults.Domain != "" {
+		*domainF = defaults.Domain
+	}
+	if !actual["http"] && defaults.HTTPS != nil {
+		*httpF = !*defaults.HTTPS
+	}
+	if !actual["port"] && defaults.Port != nil {
+		*portF = *defaults.Port
+	}
+	if !actual["php-version"] && defaults.PHP != "" {
+		*phpVersionF = defaults.PHP
+	}
+	if !actual["mysql-version"] && defaults.MySQL != "" {
+		*mysqlVersionF = defaults.MySQL
+	}
+	if !actual["phpmyadmin"] && defaults.PHPMyAdmin != nil {
+		*adminF = *defaults.PHPMyAdmin
+	}
+	https = !*httpF
 	// ---- 2. detect ----
 	proj, err := detect.Inspect(root)
 	if err != nil {
@@ -187,6 +225,16 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 	ui.OK("Detected Laravel %s (PHP %s)", orDash(proj.Laravel), orDash(proj.PHPConstraint))
 	connection := detect.DatabaseConnection(root)
 	useMySQL := managedMySQL(fs, *mysqlF, connection)
+	if !actual["mysql"] {
+		switch defaults.Database {
+		case "managed":
+			useMySQL = true
+		case "external", "sqlite":
+			useMySQL = false
+		case "auto":
+			useMySQL = connection == "mysql" || connection == "mariadb"
+		}
+	}
 
 	id, err := projectStateID(c.man, root, isWorkspace)
 	if err != nil {
@@ -212,6 +260,9 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 	// ---- 3. select and download the project's PHP runtime ----
 	rt, err := runtime.EnsurePHP(c.home.Runtimes(), selectedPHP)
 	if err != nil {
+		return err
+	}
+	if err = projecttools.ConfigurePHP(rt, stateDir, defaults); err != nil {
 		return err
 	}
 	ui.OK("PHP %s ready", selectedPHP)
@@ -296,6 +347,14 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 
 	// ---- 9. app environment (nothing written into the project) ----
 	cfg.AppEnv = st.AppEnv(root, cfg.URL())
+	if !actual["mysql"] && defaults.Database == "external" {
+		delete(cfg.AppEnv, "DB_CONNECTION")
+		delete(cfg.AppEnv, "DB_DATABASE")
+	}
+	if !actual["mysql"] && defaults.Database == "sqlite" {
+		cfg.AppEnv["DB_CONNECTION"] = "sqlite"
+		cfg.AppEnv["DB_DATABASE"] = st.SQLite
+	}
 	var db *mysql.Server
 	var dbLifetime context.Context
 	if useMySQL {
@@ -335,6 +394,13 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		ui.OK("MySQL %s ready (database: %s)", selectedMySQL, db.Env["DB_DATABASE"])
 	}
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
+	ownerState, snapshotErr := supervisor.Status(c.home.Root, registryID)
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	if snapshotErr = projecttools.SaveExecution(c.home.Root, registryID, projecttools.Execution{Generation: ownerState.Generation, Root: root, StateDir: st.Dir, Runtime: *rt, Env: cfg.Env}); snapshotErr != nil {
+		return snapshotErr
+	}
 	if db != nil && *migrate {
 		mysqlState := &prepare.State{Dir: db.Dir}
 		ui.Info("Applying MySQL migrations")
