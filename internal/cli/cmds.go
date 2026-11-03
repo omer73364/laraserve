@@ -11,6 +11,7 @@ import (
 	"laraserve/internal/pack"
 	"laraserve/internal/paths"
 	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/supervisor"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
@@ -88,6 +89,13 @@ func cmdUntrust(args []string) error {
 }
 
 func cmdClean(args []string) error {
+	home, homeErr := paths.New()
+	if homeErr != nil {
+		return homeErr
+	}
+	if err := projecttools.RequireNoTasks(home.Root, ""); err != nil {
+		return err
+	}
 	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
 	if err := parse(fs, args); err != nil {
 		return err
@@ -125,6 +133,16 @@ func (c *ctx) cleanProject(id string) {
 	if p == nil {
 		return
 	}
+	if records, err := projects.New(c.home.Root).List(); err == nil {
+		canonical, _ := projects.Canonical(p.Path)
+		for _, record := range records {
+			root, _ := projects.Canonical(record.Root)
+			if canonical != "" && root == canonical {
+				_ = os.Remove(filepath.Join(c.home.Root, "execution", record.ID+".json"))
+				_ = os.Remove(projects.New(c.home.Root).File(record.ID))
+			}
+		}
+	}
 	if p.Vendor && !p.Workspace {
 		_ = os.RemoveAll(filepath.Join(p.Path, "vendor"))
 		ui.OK("Removed %s", filepath.Join(p.Path, "vendor"))
@@ -159,6 +177,13 @@ func (c *ctx) cleanProject(id string) {
 }
 
 func cmdUninstall(args []string) error {
+	home, homeErr := paths.New()
+	if homeErr != nil {
+		return homeErr
+	}
+	if err := projecttools.RequireNoTasks(home.Root, ""); err != nil {
+		return err
+	}
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	yes := yesFlags(fs)
 	if err := parse(fs, args); err != nil {
