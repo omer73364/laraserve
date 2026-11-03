@@ -17,7 +17,7 @@ function card(p) {
  const usage = p.resources.available ? `<span>CPU ${p.resources.cpu_percent == null ? 'sampling…' : p.resources.cpu_percent.toFixed(1) + '%'}</span><span>RAM ${bytes(p.resources.rss_bytes)}</span>` : `<span>${escape(p.health)}</span>`;
  let open = '';
  try { const u = new URL(p.url); if (['http:','https:'].includes(u.protocol) && !u.username && !u.password && p.status === 'running') open = `<a class="button open" href="${escape(u.href)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`; } catch {}
- return `<article class="project-card" data-project="${p.id}"><div class="card-body"><div class="card-top"><span class="app-icon">${escape(p.name.slice(0,1).toUpperCase())}</span><div class="card-title"><h3 title="${escape(p.name)}">${escape(p.name)}</h3><div class="project-url">${escape(p.url || 'Ready when you are')}</div></div><span class="badge ${escape(p.status)}">${escape(p.status)}</span></div><div class="runtime-row"><span class="runtime"><b>PHP</b> ${escape(p.php || 'Not selected')}</span><span class="runtime">${escape(p.database || 'Database not selected')}</span></div><div class="resource" title="${escape(p.resources.note || p.health)}">${usage}</div><div class="path" title="${escape(p.source)}">${escape(p.source)}</div></div>${p.error || p.operation?.error ? `<div class="card-error">${escape(p.error || p.operation.error)}</div>` : ''}<div class="card-actions"><button class="button primary" data-action="${active?'stop':'start'}" data-id="${p.id}"${busy}>${pending ? 'Working…' : active ? '■ Stop' : '▷ Start'}</button>${active ? `<button class="button" data-action="restart" data-id="${p.id}"${busy}>↻ Restart</button>` : ''}<button class="button" data-logs="${p.id}">Logs</button><button class="button" data-settings="${p.id}">Settings</button>${open}</div></article>`;
+ return `<article class="project-card" data-project="${p.id}"><div class="card-body"><div class="card-top"><span class="app-icon">${escape(p.name.slice(0,1).toUpperCase())}</span><div class="card-title"><h3 title="${escape(p.name)}">${escape(p.name)}</h3><div class="project-url">${escape(p.url || 'Ready when you are')}</div></div><span class="badge ${escape(p.status)}">${escape(p.status)}</span></div><div class="runtime-row"><span class="runtime"><b>PHP</b> ${escape(p.php || 'Not selected')}</span><span class="runtime">${escape(p.database || 'Database not selected')}</span></div><div class="resource" title="${escape(p.resources.note || p.health)}">${usage}</div>${p.services?.length ? `<div class="runtime-row">${p.services.map(s=>`<span class="runtime">${escape(s.name)} · ${escape(s.state)}</span>`).join('')}</div>` : ''}<div class="path" title="${escape(p.source)}">${escape(p.source)}</div></div>${p.error || p.operation?.error ? `<div class="card-error">${escape(p.error || p.operation.error)}</div>` : ''}<div class="card-actions"><button class="button primary" data-action="${active?'stop':'start'}" data-id="${p.id}"${busy}>${pending ? 'Working…' : active ? '■ Stop' : '▷ Start'}</button>${active ? `<button class="button" data-action="restart" data-id="${p.id}"${busy}>↻ Restart</button>` : ''}<button class="button" data-logs="${p.id}">Logs</button><button class="button" data-settings="${p.id}">Settings</button>${open}</div></article>`;
 }
 function syncCards(shown) {
  const list = $('project-list');
@@ -130,7 +130,8 @@ async function openTools(id){
  toolProject=id;configDocument=undefined;environmentDocument=undefined;const p=projects.find(p=>p.id===id);$('tools-title').textContent=p?.name||'Project';$('project-tools').hidden=false;toolNotice('Loading settings…');showTab('settings');
  try{
   const loaded=await request(`/api/projects/${id}/settings`);if(toolProject!==id)return;configDocument=loaded;const c=configDocument.config, f=$('settings-form').elements;
-  for(const key of ['domain','php','mysql','php_ini'])f[key].value=c[key]||'';
+  for(const key of ['domain','php','mysql','node','php_ini'])f[key].value=c[key]||'';
+  for(const key of ['vite','queue','scheduler','redis','mailpit'])f['service_'+key].checked=!!c.services?.[key];
   f.port.value=c.port??'';f.database.value=c.database||'auto';f.https.value=c.https==null?'':String(c.https);f.phpmyadmin.value=c.phpmyadmin==null?'':String(c.phpmyadmin);
   for(const key of phpFields)f[key].value=c.php_settings?.[key]||'';
   toolNotice('');$('project-tools').scrollIntoView({behavior:'smooth',block:'start'});
@@ -148,7 +149,8 @@ document.querySelectorAll('[data-tool-tab]').forEach(button=>button.addEventList
 $('close-tools').addEventListener('click',()=>{$('project-tools').hidden=true;});
 $('settings-form').addEventListener('submit',async event=>{
  event.preventDefault();if(!configDocument)return;const f=event.target.elements,c={...configDocument.config};
- for(const key of ['domain','php','mysql','php_ini'])c[key]=f[key].value.trim();
+ for(const key of ['domain','php','mysql','node','php_ini'])c[key]=f[key].value.trim();
+ c.services={...c.services};for(const key of ['vite','queue','scheduler','redis','mailpit'])c.services[key]=f['service_'+key].checked;
  c.database=f.database.value;for(const key of ['https','phpmyadmin']){if(f[key].value==='')delete c[key];else c[key]=f[key].value==='true';}
  if(f.port.value==='')delete c.port;else c.port=Number(f.port.value);
  c.php_settings={...c.php_settings};for(const key of phpFields){if(f[key].value==='')delete c.php_settings[key];else c.php_settings[key]=f[key].value.trim();}

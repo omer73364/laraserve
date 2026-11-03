@@ -12,10 +12,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"laraserve/internal/devservice"
 	"laraserve/internal/metrics"
 	"laraserve/internal/projects"
 	"laraserve/internal/supervisor"
@@ -30,17 +32,18 @@ type Operation struct {
 	Error   string `json:"error,omitempty"`
 }
 type View struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Source    string         `json:"source"`
-	PHP       string         `json:"php"`
-	Database  string         `json:"database"`
-	URL       string         `json:"url"`
-	Status    string         `json:"status"`
-	Health    string         `json:"health"`
-	Error     string         `json:"error,omitempty"`
-	Operation *Operation     `json:"operation,omitempty"`
-	Resources metrics.Sample `json:"resources"`
+	Services  []devservice.Status `json:"services,omitempty"`
+	ID        string              `json:"id"`
+	Name      string              `json:"name"`
+	Source    string              `json:"source"`
+	PHP       string              `json:"php"`
+	Database  string              `json:"database"`
+	URL       string              `json:"url"`
+	Status    string              `json:"status"`
+	Health    string              `json:"health"`
+	Error     string              `json:"error,omitempty"`
+	Operation *Operation          `json:"operation,omitempty"`
+	Resources metrics.Sample      `json:"resources"`
 }
 type Server struct {
 	home, host, origin, bootstrap, cookie, csrf string
@@ -147,6 +150,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		for _, p := range list {
 			state, err := supervisor.Status(s.home, p.ID)
 			v := View{ID: p.ID, Name: p.Name, Source: p.Source, PHP: p.PHP, Database: p.Database, Status: state.Status, Health: "Stopped", URL: safeURL(state.URL)}
+			if privateID, e := s.privateID(p); e == nil {
+				v.Services = devservice.ReadStatus(filepath.Join(s.home, "projects", privateID), state.Generation, state.Status)
+			}
 			if err != nil {
 				v.Status = "unknown"
 				v.Error = "Cannot read project owner"

@@ -41,6 +41,9 @@ func (s *Server) logs(p *projects.Project, source, query string) (LogResult, err
 		base = s.home
 		files = []string{filepath.Join(s.home, "projects", stateID, "logs", "server.log")}
 		result.Note += " PHP and web server output share this stream."
+	case "vite", "queue", "scheduler", "redis", "mailpit":
+		base = s.home
+		files = []string{filepath.Join(s.home, "projects", stateID, "logs", source+".log")}
 	case "mysql":
 		base = s.home
 		if p.MySQL != "" && !strings.ContainsAny(p.MySQL, "/\\") {
