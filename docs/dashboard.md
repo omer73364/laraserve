@@ -6,7 +6,7 @@ The dashboard is included in the client. It needs no Node installation, frontend
 
 ## Projects and controls
 
-Existing registered projects appear with their state, local URL, PHP version, database selection, source folder, and owner health. Direct legacy project registrations are imported using the same logic as the terminal. Old workspace records without a known source cannot safely be imported.
+Existing registered projects appear with their state, local URL, PHP version, Laravel metadata, database selection, source folder, and owner health. Direct legacy project registrations are imported using the same logic as the terminal. Old workspace records without a known source cannot safely be imported.
 
 - **Start** uses saved reusable options and launches the existing project in the background.
 - **Stop** contacts that project's authenticated owner and waits for its resources to stop.
@@ -53,3 +53,19 @@ Configuration is divided into Connection, Runtimes & database, PHP configuration
 Commands includes shortcuts that only fill the form. The explicit Run action button starts the task. Activity displays the latest task and supports hiding/reopening output and cancelling an active task. It is not a full historical task browser. App creation and runtime management have dedicated workspace pages.
 
 Light is the default appearance, with Dark and System options in the header. The browser remembers the selection locally; a non-sensitive appearance cookie carries it across dashboard ports on the same host. Both palettes use the README's LaraServe logo and lime accent. All scripts, styles, and images remain bundled with no external fonts or assets. Layouts adapt to narrow screens and include visible keyboard focus.
+
+## Live monitoring
+
+Workspace pulse cards show running apps, measured CPU, process-tree resident memory, and active development services. They refresh with project status every three seconds while the page is visible. CPU/memory sparklines keep up to 30 actual refresh samples in this browser page; they are not persistent history. Unavailable counters and the first CPU sample are displayed explicitly. Sample counts identify partial measurement coverage. CPU can exceed 100% across cores, and summed RSS can count shared pages more than once. See the resource measurement limits above.
+
+The directory includes Open app and Restart alongside Start/Stop. Open app is enabled only for a running app with a valid web URL; Restart is unavailable during preparation/stopping. Laravel metadata comes from the `laravel/framework` package in `composer.lock`, or falls back to the declared `composer.json` constraint. The column labels these sources as Locked or Constraint and does not claim a dependency is installed.
+
+## Add an existing app and browse folders
+
+Use **Add app** to choose a Laravel source folder containing regular `artisan` and `composer.json` files. Registration records the project privately without executing PHP, installing dependencies, modifying its files, starting services, or provisioning a database. Existing registrations, including older identities and saved launch options, are retained. Invalid project settings are reported before a new registration is created.
+
+Both Add app and Create app include **Browse**. The local modal lists directories, supports Home/Parent, an editable absolute path, a filter, and hidden folders. Creating an app lets you choose a parent folder and new app folder name; choosing the destination creates nothing. An empty folder name selects the current folder, which must still satisfy the new-app empty-folder checks when creation runs.
+
+Folder listings and registration are authenticated, same-origin, CSRF-protected POST requests. Listings return bounded directory names and paths, not file contents; symlink entries are omitted, while a deliberately entered symlink path is resolved to its canonical folder. Hidden folders are off by default. No native picker program or shell command is launched.
+
+Dropdowns use a bundled custom control while retaining the form's original values. Arrow keys, Home/End, type-ahead, Enter/Space, Escape, Tab, and pointer selection are supported. Focus styling surrounds search fields rather than drawing a second outline around the inner input.
