@@ -12,6 +12,11 @@ func WriteJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
+	return WriteBytes(path, append(b, '\n'))
+}
+
+// WriteBytes atomically publishes private file contents.
+func WriteBytes(path string, b []byte) error {
 	f, err := os.CreateTemp(filepath.Dir(path), ".metadata-*")
 	if err != nil {
 		return err
@@ -21,7 +26,7 @@ func WriteJSON(path string, value any) error {
 		f.Close()
 		return err
 	}
-	if _, err = f.Write(append(b, '\n')); err != nil {
+	if _, err = f.Write(b); err != nil {
 		f.Close()
 		return err
 	}
