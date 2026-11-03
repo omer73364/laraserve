@@ -17,8 +17,12 @@ import (
 type NodeRuntime struct{ Dir, Node, NPM, Version string }
 
 // NodeVersions uses the publisher's release index, retaining it for offline
-// restarts. Only stable LTS lines with an archive for this platform are selected.
+// restarts. Stable even-numbered release lines (Node 14+) are retained, including
+// older patches so exact project pins work. No prerelease is selected implicitly.
 func NodeVersions(root string) ([]string, error) {
+	if err := os.MkdirAll(root, 0700); err != nil {
+		return nil, err
+	}
 	file := filepath.Join(root, "node-releases.json")
 	b, readErr := os.ReadFile(file)
 	info, _ := os.Stat(file)
@@ -54,11 +58,10 @@ func nodeVersions(b []byte) ([]string, error) {
 	case "windows":
 		platform = "win-" + nodeArch() + "-zip"
 	}
-	seen := map[uint64]bool{}
 	var versions []string
 	for _, r := range releases {
 		v, e := semver.NewVersion(r.Version)
-		if e != nil || v.Prerelease() != "" || string(r.LTS) == "false" || len(r.LTS) == 0 {
+		if e != nil || v.Prerelease() != "" || v.Major() < 14 || v.Major()%2 != 0 {
 			continue
 		}
 		supported := false
@@ -67,10 +70,9 @@ func nodeVersions(b []byte) ([]string, error) {
 				supported = true
 			}
 		}
-		if !supported || seen[v.Major()] {
+		if !supported {
 			continue
 		}
-		seen[v.Major()] = true
 		versions = append(versions, v.String())
 	}
 	if len(versions) == 0 {

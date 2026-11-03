@@ -20,6 +20,9 @@ import (
 // Explicit Node/npm commands use the project's selected runtime. No dependencies
 // or lifecycle scripts are installed merely because an application starts.
 func cmdNode(args []string, npm bool) error {
+	if err := process.InitOwnership(); err != nil {
+		return err
+	}
 	target := "."
 	if len(args) > 0 && args[0] != "--" {
 		target = args[0]
@@ -32,6 +35,10 @@ func cmdNode(args []string, npm bool) error {
 		args = []string{"--version"}
 	}
 	root, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
 		return err
 	}
