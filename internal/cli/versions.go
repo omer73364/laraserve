@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"laraserve/internal/detect"
+	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
 	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
@@ -51,7 +52,11 @@ func cmdVersions(args []string) error {
 	}
 	fields := []ui.Field{{Label: "Project", Value: root}, {Label: "PHP", Value: php}}
 	conn := detect.DatabaseConnection(root)
-	if conn == "mysql" || conn == "mariadb" {
+	doc, err := projectconfig.Read(root)
+	if err != nil {
+		return err
+	}
+	if doc.Config.Database == "managed" || doc.Config.Database != "external" && doc.Config.Database != "sqlite" && (conn == "mysql" || conn == "mariadb") {
 		mysql, err := versions.ProjectMySQL(root, runtime.MySQLVersions(), "", locked.MySQL)
 		if err != nil {
 			return err
