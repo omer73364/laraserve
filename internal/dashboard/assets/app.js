@@ -6,17 +6,18 @@ let csrf='',projects=[],fetching=false,logRequest,searchTimer;
 let currentView='projects',detailTab='overview',settingsGroup='connection',lastRoute='#projects';
 let settingsDirty=false,environmentDirty=false,environmentLoaded=false,environmentLoading=false,settingsLoading=false,savingSettings=false,savingEnvironment=false,taskDismissed=false;
 const localBusy=new Set();
+const telemetry={signature:'',cpu:[],memory:[]};
 const attention=['failed','crashed','unresponsive','unknown'];
 const projectTabs=['overview','configuration','environment','actions','logs'];
 const mediaTheme=window.matchMedia('(prefers-color-scheme: dark)');
 let appearance='light';
 try{const cookie=document.cookie.split('; ').find(value=>value.startsWith('laraserve-appearance='))?.split('=')[1];const saved=cookie||localStorage.getItem('laraserve-appearance');if(['light','dark','system'].includes(saved))appearance=saved;}catch{}
-function applyTheme(){document.documentElement.dataset.theme=appearance==='system'?(mediaTheme.matches?'dark':'light'):appearance;$('theme').value=appearance;}
+function applyTheme(){document.documentElement.dataset.theme=appearance==='system'?(mediaTheme.matches?'dark':'light'):appearance;$('theme').value=appearance;LaraControls.sync();}
 applyTheme();
 $('theme').addEventListener('change',()=>{appearance=$('theme').value;try{localStorage.setItem('laraserve-appearance',appearance);document.cookie=`laraserve-appearance=${appearance}; Max-Age=31536000; Path=/; SameSite=Strict`;}catch{}applyTheme();});
 mediaTheme.addEventListener('change',()=>{if(appearance==='system')applyTheme();});
 function message(text,error=false){$('notice').textContent=text;$('notice').hidden=!text;$('notice').classList.toggle('danger',error);}
-function setFormEnabled(id,enabled){for(const el of $(id).elements)el.disabled=!enabled;}
+function setFormEnabled(id,enabled){for(const el of $(id).elements)el.disabled=!enabled;LaraControls.sync();}
 function updateHTML(el,html){if(el.innerHTML!==html)el.innerHTML=html;}
 function safeLink(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{return '';}}
 function badge(state){return `<span class="badge ${escape(state)}"><i class="dot ${escape(state)}"></i>${escape(state)}</span>`;}
@@ -24,13 +25,45 @@ function projectActions(p,compact=false){
  const active=['running','starting','stopping','unresponsive'].includes(p.status),pending=p.operation?.pending||localBusy.has(p.id);
  const disabled=pending?' disabled':'';
  const url=p.status==='running'?safeLink(p.url):'';
+ const restartDisabled=pending||!active||['starting','stopping'].includes(p.status)?' disabled':'';
  return `<button class="button ${active?'':'primary'}" data-action="${active?'stop':'start'}" data-id="${p.id}"${disabled}>${pending?'Working…':active?'Stop':'Start'}</button>`+
- (!compact&&active?`<button class="button" data-action="restart" data-id="${p.id}"${disabled}>↻ Restart</button>`:'')+
- (url&&!compact?`<a class="button primary" href="${escape(url)}" target="_blank" rel="noopener noreferrer">Open app ↗</a>`:'');
+ `<button class="button ${compact?'restart-control':''}" data-action="restart" data-id="${p.id}" aria-label="Restart ${escape(p.name)}" title="Restart ${escape(p.name)}"${restartDisabled}>${compact?'↻':'↻ Restart'}</button>`+
+ (url?`<a class="button open-app ${compact?'':'primary'}" href="${escape(url)}" target="_blank" rel="noopener noreferrer">Open app <span aria-hidden="true">↗</span></a>`:`<button class="button open-app" disabled title="Start this app to open it">Open app <span aria-hidden="true">↗</span></button>`);
 }
 function projectRow(p){
- const running=p.services?.filter(s=>s.state==='running').length||0;
- return `<tr data-project="${p.id}"><td><div class="directory-identity"><span class="project-avatar">${escape(p.name.slice(0,1).toUpperCase())}</span><div><a class="project-name" href="#project/${p.id}/overview">${escape(p.name)}</a><span class="source-path" title="${escape(p.source)}">${escape(p.source)}</span></div></div></td><td><div class="stack-label">PHP ${escape(p.php||'Auto')}</div><span class="muted">${escape(p.database||'Auto database')}</span></td><td><span class="service-count">${p.services?.length?`${running} / ${p.services.length} running`:'—'}</span></td><td>${badge(p.status)}${p.error||p.operation?.error?'<span class="row-error">Check project details</span>':''}</td><td><div class="row-actions">${projectActions(p,true)}<a class="button icon-button" href="#project/${p.id}/overview" aria-label="Manage ${escape(p.name)}">↗</a></div></td></tr>`;
+ const running=p.services?.filter(s=>s.state==='running'||s.state==='ready').length||0;
+ const framework=p.laravel?escape(p.laravel.replace(/^v(?=\d)/,'')):'—';
+ return `<tr data-project="${p.id}"><td><div class="directory-identity"><span class="project-avatar">${escape(p.name.slice(0,1).toUpperCase())}</span><div><a class="project-name" href="#project/${p.id}/overview">${escape(p.name)}</a><span class="source-path" title="${escape(p.source)}">${escape(p.source)}</span></div></div></td><td><span class="mobile-field">Laravel </span><span class="framework-version" title="${escape(p.laravel_source||'Version unavailable')}">${framework}</span><span class="version-source">${p.laravel?(p.laravel_source==='composer.lock'?'Locked':'Constraint'):'Not detected'}</span></td><td><div class="stack-label">PHP ${escape(p.php||'Auto')}</div><span class="muted">${escape(p.database||'Auto database')}</span></td><td><span class="service-count">${p.services?.length?`${running} / ${p.services.length} running`:'None tracked'}</span></td><td>${badge(p.status)}${p.error||p.operation?.error?'<span class="row-error">Check project details</span>':''}</td><td><div class="row-actions">${projectActions(p,true)}</div></td></tr>`;
+}
+function recordTelemetry(){
+ const measured=projects.filter(p=>p.resources.available),signature=measured.map(p=>p.id).sort().join('|');
+ if(signature!==telemetry.signature){telemetry.cpu=[];telemetry.memory=[];telemetry.signature=signature;}
+ if(!measured.length){telemetry.cpu=[];telemetry.memory=[];return;}
+ telemetry.memory.push(measured.reduce((sum,p)=>sum+p.resources.rss_bytes,0));
+ const sampled=measured.filter(p=>p.resources.cpu_percent!=null);
+ if(sampled.length===measured.length)telemetry.cpu.push(sampled.reduce((sum,p)=>sum+p.resources.cpu_percent,0));else telemetry.cpu=[];
+ telemetry.memory=telemetry.memory.slice(-30);telemetry.cpu=telemetry.cpu.slice(-30);
+}
+function sparkline(values){
+ if(values.length<2)return '<span class="trend-placeholder"></span>';
+ const max=Math.max(...values,1),points=values.map((value,i)=>`${(i/(values.length-1)*110+2).toFixed(1)},${(26-value/max*22).toFixed(1)}`).join(' ');
+ return `<svg viewBox="0 0 114 30" focusable="false"><polyline points="${points}"></polyline></svg>`;
+}
+function renderMonitoring(){
+ const running=projects.filter(p=>p.status==='running'),measured=projects.filter(p=>p.resources.available),sampled=measured.filter(p=>p.resources.cpu_percent!=null);
+ const services=projects.flatMap(p=>p.services||[]),active=services.filter(s=>['running','ready'].includes(s.state));
+ const issues=projects.filter(p=>attention.includes(p.status));
+ $('total').textContent=projects.length;$('running').textContent=running.length;
+ $('running-note').textContent=issues.length?`${issues.length} ${issues.length===1?'app needs':'apps need'} attention`:`${projects.filter(p=>p.status==='stopped').length} stopped · ready when you are`;
+ updateHTML($('app-dots'),projects.slice(0,14).map(p=>`<i class="dot ${escape(p.status)}"></i>`).join(''));
+ $('cpu').textContent=sampled.length?sampled.reduce((sum,p)=>sum+p.resources.cpu_percent,0).toFixed(1)+'%':measured.length?'Sampling…':'—';
+ $('cpu-note').textContent=sampled.length?(sampled.length===running.length?`${sampled.length} ${sampled.length===1?'app':'apps'} sampled`:`${sampled.length} of ${running.length} apps sampled`):(measured.length?'Collecting first CPU sample':running.length?'Counters unavailable':'Start an app to monitor');
+ $('memory').textContent=measured.length?bytes(measured.reduce((sum,p)=>sum+p.resources.rss_bytes,0)):'—';
+ $('memory-note').textContent=measured.length?`${measured.length} ${measured.length===1?'app':'apps'} · process tree RSS`:(running.length?'Counters unavailable':'Start an app to monitor');
+ $('active-services').textContent=active.length;$('service-total').textContent=services.length?`of ${services.length} tracked`:'';
+ $('service-health').textContent=services.some(s=>['failed','crashed'].includes(s.state))?'Check services':active.length?'Running':'Idle';
+ updateHTML($('cpu-trend'),sparkline(telemetry.cpu));updateHTML($('memory-trend'),sparkline(telemetry.memory));
+ $('monitor-attention').hidden=!issues.length;$('monitor-attention').textContent=`${issues.length} ${issues.length===1?'app needs':'apps need'} attention. Review status →`;
 }
 function syncRows(shown){
  const list=$('project-list'),existing=new Map([...list.children].map(n=>[n.dataset.project,n]));
@@ -47,11 +80,9 @@ function render(){
  const query=$('project-search').value.toLowerCase(),status=$('project-status').value;
  const shown=projects.filter(p=>`${p.name} ${p.source} ${p.url}`.toLowerCase().includes(query)&&(status==='all'||(status==='attention'?attention.includes(p.status):p.status===status)));
  syncRows(shown);
- $('total').textContent=$('nav-count').textContent=projects.length;
+ $('nav-count').textContent=projects.length;
  $('project-count').textContent=`${shown.length} ${shown.length===1?'project':'projects'}`;
- $('running').textContent=projects.filter(p=>p.status==='running').length;
- const measured=projects.filter(p=>p.resources.available);
- $('memory').textContent=measured.length?bytes(measured.reduce((sum,p)=>sum+p.resources.rss_bytes,0)):'—';
+ renderMonitoring();
  $('empty').hidden=projects.length!==0;$('no-match').hidden=!projects.length||shown.length!==0;
  document.querySelector('.table-scroll').hidden=shown.length===0;
  const signature=projects.map(p=>p.id+p.name).join('|');
@@ -64,6 +95,7 @@ function render(){
   $('log-project').dataset.signature=signature;
  }
  if(currentView==='detail')renderDetail();
+ LaraControls.sync();
 }
 function renderDetail(){
  const p=projects.find(p=>p.id===toolProject);if(!p)return;
@@ -74,7 +106,7 @@ function renderDetail(){
  const error=p.error||p.operation?.error||'';$('project-error').textContent=error;$('project-error').hidden=!error;
  $('overview-health').textContent=p.health;
  const c=configDocument?.config;
- const facts=[['Application URL',p.url||'Available after starting'],['PHP version',p.php||c?.php||'Detected from project'],['Database',p.database||c?.database||'Detected from project'],['Memory',p.resources.available?bytes(p.resources.rss_bytes):'Not available'],['CPU',p.resources.available?(p.resources.cpu_percent==null?'Sampling…':p.resources.cpu_percent.toFixed(1)+'%'):'Not available'],['Project folder',p.source]];
+ const facts=[['Application URL',p.url||'Available after starting'],['Laravel',p.laravel?(p.laravel_source==='composer.lock'?p.laravel:p.laravel+' (constraint)'):'Not detected'],['PHP version',p.php||c?.php||'Detected from project'],['Database',p.database||c?.database||'Detected from project'],['Memory',p.resources.available?bytes(p.resources.rss_bytes):'Not available'],['CPU',p.resources.available?(p.resources.cpu_percent==null?'Sampling…':p.resources.cpu_percent.toFixed(1)+'%'):'Not available'],['Project folder',p.source]];
  updateHTML($('overview-facts'),facts.map(([key,value])=>`<div><dt>${key}</dt><dd>${escape(value)}</dd></div>`).join(''));
  const services=[['vite','Vite','Frontend development server'],['queue','Queue worker','Background jobs'],['scheduler','Scheduler','Scheduled commands'],['redis','Redis','Private data store'],['mailpit','Mailpit','Local email inbox']];
  updateHTML($('overview-services'),services.map(([key,label,description])=>{
@@ -96,12 +128,12 @@ function route(){
  const isProject=parts[0]==='project'&&/^[a-f0-9]{12}$/.test(parts[1]||'');
  const changesProject=!isProject||parts[1]!==toolProject;
  if(savingSettings||savingEnvironment||(changesProject&&hasDraft()&&!confirm('Discard your unsaved project changes?'))){history.replaceState(null,'',lastRoute);$('project-switcher').value=toolProject;return;}
- lastRoute=hash;message('');
+ lastRoute=hash;message('');LaraControls.close();
  if(changesProject){if(logRequest){logRequest.abort();logRequest=undefined;}settingsDirty=false;environmentDirty=false;toolProject='';configDocument=undefined;environmentDocument=undefined;environmentLoaded=false;environmentLoading=false;toolNotice('');}
- currentView=isProject?'detail':['projects','runtimes','new','activity'].includes(parts[0])?parts[0]:'projects';
+ currentView=isProject?'detail':['projects','runtimes','new','add','activity'].includes(parts[0])?parts[0]:'projects';
  if(isProject&&!projects.some(p=>p.id===parts[1])){currentView='projects';message('This project is no longer registered.');}
  document.querySelectorAll('[data-view]').forEach(el=>el.hidden=el.dataset.view!==currentView);
- document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===(currentView==='detail'||currentView==='new'?'projects':currentView))el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
+ document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===(currentView==='detail'||currentView==='new'||currentView==='add'?'projects':currentView))el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
  if(currentView==='detail'){
   const nextTab=projectTabs.includes(parts[2])?parts[2]:'overview';if(nextTab!==detailTab)toolNotice('');detailTab=nextTab;
   document.querySelectorAll('[data-project-panel]').forEach(el=>el.hidden=el.dataset.projectPanel!==detailTab);
@@ -111,13 +143,13 @@ function route(){
   if(detailTab==='logs'){$('log-project').value=parts[1];loadLogs();}
   document.title=`${projects.find(p=>p.id===parts[1]).name} · LaraServe`;
  }else{
-  document.title=`${{projects:'Projects',runtimes:'Runtimes',new:'Create app',activity:'Activity'}[currentView]} · LaraServe`;
+  document.title=`${{projects:'Projects',runtimes:'Runtimes',new:'Create app',add:'Add app',activity:'Activity'}[currentView]} · LaraServe`;
   if(currentView==='runtimes')loadRuntimes();
  }
  if(currentView==='activity'){$('activity-empty').hidden=!!currentTask;if(currentTask){taskDismissed=false;$('task-panel').hidden=false;}}
  // Move focus to the new page title for keyboard users without disturbing live refreshes.
  const heading=document.querySelector(`[data-view="${currentView}"] h1`);if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
- window.scrollTo({top:0,behavior:'instant'});
+ LaraControls.sync();window.scrollTo({top:0,behavior:'instant'});
 }
 async function request(path,options={}){
  const response=await fetch(path,{cache:'no-store',credentials:'same-origin',...options});
@@ -126,7 +158,7 @@ async function request(path,options={}){
 }
 async function refresh(){
  if(fetching||!csrf)return;fetching=true;
- try{projects=await request('/api/projects');render();$('updated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+ try{projects=await request('/api/projects');recordTelemetry();render();$('updated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
  catch(e){message(e.message,true);}finally{fetching=false;}
 }
 async function loadLogs(){
@@ -151,6 +183,7 @@ document.addEventListener('click',async event=>{
 });
 $('refresh').addEventListener('click',()=>{message('');refresh();});
 $('project-search').addEventListener('input',render);$('project-status').addEventListener('change',render);
+$('monitor-attention').addEventListener('click',()=>{$('project-status').value='attention';render();$('project-search').focus();});
 $('clear-filters').addEventListener('click',()=>{$('project-search').value='';$('project-status').value='all';render();$('project-search').focus();});
 $('project-switcher').addEventListener('change',()=>{location.hash=`project/${$('project-switcher').value}/${detailTab}`;});
 $('log-source').addEventListener('change',loadLogs);$('refresh-logs').addEventListener('click',loadLogs);
@@ -160,7 +193,7 @@ $('settings-form').addEventListener('invalid',event=>{const section=event.target
 $('settings-form').addEventListener('input',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
 $('settings-form').addEventListener('change',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
 $('environment-form').addEventListener('input',()=>{environmentDirty=true;toolNotice('');});
-document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{$('action-kind').value='artisan';$('action-command').value=button.dataset.command;$('action-args').value='';$('schema-confirm').checked=false;$('action-command').focus();}));
+document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{$('action-kind').value='artisan';$('action-command').value=button.dataset.command;$('action-args').value='';$('schema-confirm').checked=false;LaraControls.sync();$('action-command').focus();}));
 window.addEventListener('beforeunload',event=>{if(hasDraft()||savingSettings||savingEnvironment){event.preventDefault();event.returnValue='';}});
 window.addEventListener('hashchange',()=>{if(/^[a-f0-9]{64}$/.test(location.hash.slice(1)))connect();else route();});
 async function connect(){
@@ -235,7 +268,7 @@ async function watchTask(id,reveal=true){
 }
 $('cancel-task').addEventListener('click',async()=>{if(!currentTask)return;try{await post(`/api/tasks/${currentTask}/cancel`,{});watchTask(currentTask);}catch(e){message(e.message,true);}});
 $('create-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('create-form',false);try{const task=await post('/api/create',{path:$('create-path').value.trim(),starter:$('create-starter').value,database:$('create-database').value,php:$('create-php').value.trim(),version:$('create-version').value.trim(),migrate:$('create-migrate').checked});watchTask(task.id);$('task-panel').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){message(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('create-form',true);}});
-function runtimeVersions(){$('runtime-version').innerHTML=[...(catalog[$('runtime-kind').value]||[])].reverse().map(v=>`<option value="${escape(v)}">${escape(v)}</option>`).join('');}
+function runtimeVersions(){$('runtime-version').innerHTML=[...(catalog[$('runtime-kind').value]||[])].reverse().map(v=>`<option value="${escape(v)}">${escape(v)}</option>`).join('');LaraControls.sync();}
 async function loadRuntimes(){try{const data=await request('/api/runtimes');$('runtime-list').innerHTML=data.installed.length?data.installed.map(entry=>`<div class="runtime-entry"><div><code>${escape(entry.key)}</code><p>${bytes(entry.bytes)} · ${escape(entry.reason||'Unreferenced published cache')}</p></div>${entry.protected?'':`<button class="button" data-remove-cache="${escape(entry.key)}">Remove</button>`}</div>`).join(''):'<p>No published runtimes in the cache yet.</p>';}catch(e){message(e.message,true);}}
 $('runtime-kind').addEventListener('change',runtimeVersions);
 $('refresh-runtimes').addEventListener('click',loadRuntimes);
@@ -251,4 +284,68 @@ $('dismiss-task').addEventListener('click',()=>{
  }
 });
 $('show-task').addEventListener('click',()=>{taskDismissed=false;$('activity-empty').hidden=true;$('task-panel').hidden=false;});
+// Folder browsing only lists local directories; selecting a destination creates nothing.
+let folderTarget='',folderListing,folderRequest,folderSequence=0;
+function folderError(text){$('folder-error').textContent=text;$('folder-error').hidden=!text;}
+function selectedFolder(){
+ if(!folderListing)return '';
+ const name=folderTarget==='create-path'?$('folder-app-name').value.trim():'';
+ if(name&&(/[\\/\x00-\x1f]/.test(name)||name==='.'||name==='..'))return '';
+ return name?folderListing.path+(folderListing.path.endsWith(folderListing.separator)?'':folderListing.separator)+name:folderListing.path;
+}
+function updateFolderSelection(){
+ const path=selectedFolder();$('folder-selected').textContent=path||'Enter a single folder name, without slashes.';$('folder-choose').disabled=!path;
+}
+function renderFolders(){
+ if(!folderListing)return;
+ const query=$('folder-search').value.toLowerCase(),shown=folderListing.folders.filter(folder=>folder.name.toLowerCase().includes(query));
+ $('folder-list').innerHTML=shown.length?shown.map(folder=>`<button type="button" class="folder-entry" data-folder-path="${escape(folder.path)}"><span class="folder-icon" aria-hidden="true">▱</span><span>${escape(folder.name)}</span><span class="folder-arrow" aria-hidden="true">›</span></button>`).join(''):`<div class="folder-empty">${query?'No matching folders.':'No subfolders here. You can select this folder.'}</div>`;
+ $('folder-note').textContent=folderListing.truncated?'Showing a limited set of folders. Enter a full path to reach another folder.':`${shown.length} ${shown.length===1?'folder':'folders'} · only folder names are listed`;
+}
+async function loadFolder(path){
+ if(folderRequest)folderRequest.abort();
+ const controller=new AbortController(),sequence=++folderSequence;folderRequest=controller;
+ folderError('');$('folder-list').textContent='Opening folder…';$('folder-choose').disabled=true;
+ try{
+  const data=await request('/api/folders',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({path,hidden:$('folder-hidden').checked}),signal:controller.signal});
+  if(sequence!==folderSequence||!$('folder-dialog').open)return;
+  folderListing=data;$('folder-location').value=data.path;$('folder-search').value='';$('folder-up').disabled=data.path===data.parent;
+  renderFolders();updateFolderSelection();
+ }catch(e){if(e.name!=='AbortError'&&sequence===folderSequence){$('folder-list').textContent='Could not open this folder. Enter another path or choose Home.';folderError(e.message);}}
+}
+document.querySelectorAll('[data-browse]').forEach(button=>button.addEventListener('click',()=>{
+ folderTarget=button.dataset.browse;folderListing=undefined;folderError('');$('folder-search').value='';$('folder-selected').textContent='Choose a folder';
+ const creating=folderTarget==='create-path';
+ $('folder-title').textContent=creating?'Choose where to create your app':'Choose an existing Laravel app';
+ $('folder-description').textContent=creating?'Select a parent folder, then give your new app a folder name.':'Select the source folder containing artisan and composer.json.';
+ $('folder-new-name').hidden=!creating;
+ let initial=$(folderTarget).value.trim();
+ if(creating&&initial){const trimmed=initial.replace(/[\\/]$/,'');const separator=Math.max(trimmed.lastIndexOf('/'),trimmed.lastIndexOf('\\'));const name=trimmed.slice(separator+1);if(name&&separator>=0){$('folder-app-name').value=name;initial=trimmed.slice(0,separator+1);}}
+ if(creating&&!$(folderTarget).value.trim())$('folder-app-name').value='my-app';
+ LaraControls.close();$('folder-dialog').showModal();loadFolder(initial);
+}));
+$('folder-location-form').addEventListener('submit',event=>{event.preventDefault();loadFolder($('folder-location').value.trim());});
+$('folder-list').addEventListener('click',event=>{const button=event.target.closest('[data-folder-path]');if(button)loadFolder(button.dataset.folderPath);});
+$('folder-search').addEventListener('input',renderFolders);
+$('folder-app-name').addEventListener('input',updateFolderSelection);
+$('folder-hidden').addEventListener('change',()=>loadFolder(folderListing?.path||$('folder-location').value.trim()));
+$('folder-up').addEventListener('click',()=>{if(folderListing)loadFolder(folderListing.parent);});
+$('folder-home').addEventListener('click',()=>loadFolder(''));
+for(const id of ['folder-close','folder-cancel'])$(id).addEventListener('click',()=>$('folder-dialog').close());
+$('folder-dialog').addEventListener('close',()=>{if(folderRequest)folderRequest.abort();folderSequence++;});
+$('folder-choose').addEventListener('click',()=>{
+ const path=selectedFolder();if(!path)return;
+ $(folderTarget).value=path;$(folderTarget).dispatchEvent(new Event('input',{bubbles:true}));$('folder-dialog').close();$(folderTarget).focus();
+});
+$('add-app-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(event.target.dataset.pending)return;
+ event.target.dataset.pending='true';setFormEnabled('add-app-form',false);$('add-app-notice').hidden=true;
+ try{
+  const project=await post('/api/projects/add',{path:$('existing-path').value.trim()});
+  await refresh();location.hash=`project/${project.id}/overview`;
+ }catch(e){$('add-app-notice').textContent=e.message;$('add-app-notice').hidden=false;}
+ finally{delete event.target.dataset.pending;setFormEnabled('add-app-form',true);}
+});
+
+LaraControls.enhance();
 connect();
