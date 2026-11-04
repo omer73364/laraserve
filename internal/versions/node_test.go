@@ -3,6 +3,7 @@ package versions
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -42,6 +43,39 @@ func TestNodeRequirements(t *testing.T) {
 	got, err = ProjectNode(root, available, "", "")
 	if err != nil || got != "24.10.0" {
 		t.Fatal(got, err)
+	}
+}
+
+func TestNodeSelectionExplainsPinsAndPreservesExactVersions(t *testing.T) {
+	for _, tc := range []struct{ file, body, source, want string }{
+		{".nvmrc", "22.22.0", ".nvmrc", "22.22.0"},
+		{".node-version", "24", ".node-version", "24.10.0"},
+		{".laraserve.json", `{"node":"22"}`, ".laraserve.json", "22.23.0"},
+		{"package.json", `{"volta":{"node":"24.10.0"}}`, "package.json → volta.node", "24.10.0"},
+		{".nvmrc", "lts/*", ".nvmrc", "22.23.0"},
+	} {
+		t.Run(tc.file+tc.want, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, tc.file)
+			if err := os.WriteFile(path, []byte(tc.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := ResolveProjectNode(root, []string{"22.22.0", "22.23.0", "24.10.0", "26.1.0"}, "", "", "22.23.0", "24.10.0", "26.1.0")
+			if err != nil || got.Version != tc.want || got.Source != tc.source || !strings.Contains(got.Explanation(), tc.source) {
+				t.Fatalf("%+v, %v", got, err)
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != tc.body {
+				t.Fatal("selection changed the project pin")
+			}
+		})
+	}
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, ".nvmrc"), []byte("22.22.1"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveProjectNode(root, []string{"22.23.0"}, "", ""); err == nil || !strings.Contains(err.Error(), ".nvmrc pin \"22.22.1\"") {
+		t.Fatalf("missing exact pin explanation: %v", err)
 	}
 }
 func TestPackageManagerConflicts(t *testing.T) {

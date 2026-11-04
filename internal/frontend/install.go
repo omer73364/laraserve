@@ -37,7 +37,6 @@ func EnsureDependencies(ctx context.Context, cache, root, stateDir string) (*run
 	if e != nil {
 		return nil, e
 	}
-	activity.Detail("Node " + node.Version + " · selected for this project's requirements")
 	manager, _, e := versions.PackageManager(root)
 	if e != nil {
 		return nil, e
