@@ -105,3 +105,9 @@ Task workers reopen the built executable through `__project-task`; terminal and 
 See [Phase 5](phase-5-checkpoint.md) and [development services](development-services.md). Restore source at `restore/phase-5-local-ready`, or clone `dist/checkpoints/phase-5.bundle` with branch `codex/phase-5-development-services`.
 
 The opt-in `TestRealDevelopmentWorkerLifecycle` uses the same client/PHP environment variables as the other lifecycle tests and checks worker readiness, output, failure propagation, restart and stop. Actual Node, Vite, Redis and Mailpit download/network checks use an isolated temporary `LARASERVE_HOME`; no payload is embedded or added to source history.
+
+### Dashboard behavior checks
+
+Run `make check-ui` with a local Node installation to check dashboard JavaScript syntax and the asynchronous state/notification regressions. It uses Node's built-in test runner and installs no packages. Keep these checks alongside `go test -race ./...` and `go vet ./...` when changing client state or shared project operations.
+
+Project preparation can be inspected without changing files using `laraserve check ./project` or `laraserve check ./project --json`. A blocking issue produces a nonzero exit status; automatic preparation and warnings do not. The private general support report remains a separate `laraserve doctor --report FILE` operation.

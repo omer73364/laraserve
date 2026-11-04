@@ -110,3 +110,11 @@ phpMyAdmin accepts both loopback host aliases, and its sign-on cookie allows the
 ### App workspace layout
 
 The dashboard uses a persistent desktop sidebar with workspace navigation and project shortcuts showing current status. A compact toolbar displays the current section or project. Appearance and notification history remain available in the sidebar footer. On narrow screens, the sidebar becomes a keyboard-accessible drawer: closed navigation is inert, Tab stays inside the open drawer, and Escape closes it and restores focus to the navigation button. Existing project controls and settings remain available.
+
+### Setup and workflow improvements
+
+Use **Check setup** from project details for an offline preparation report, including direct links to relevant settings, environment, and commands. Missing items that LaraServe handles automatically are distinguished from issues needing attention. The report changes no files; startup still performs final service checks.
+
+Settings and environment files offer **Save & restart** to apply a deliberate change immediately. Ordinary Save keeps the existing behavior. Reload asks before discarding a draft. Loading status appears beside the form, and failed loads offer a visible reload path.
+
+The toolbar's workspace search (**Ctrl/Cmd K**) switches between projects and workspace pages. Arrow keys select a result and Enter opens it; Escape returns to the prior control. **/** focuses the visible project search outside text fields. Existing draft confirmations still apply to navigation.
