@@ -84,6 +84,7 @@ function render(){
  const shown=projects.filter(p=>`${p.name} ${p.source} ${p.url}`.toLowerCase().includes(query)&&(status==='all'||(status==='attention'?attention.includes(p.status):p.status===status)));
  syncRows(shown);
  $('nav-count').textContent=projects.length;
+ renderSidebar();
  $('project-count').textContent=`${shown.length} ${shown.length===1?'project':'projects'}`;
  renderMonitoring();
  $('empty').hidden=projects.length!==0;$('no-match').hidden=!projects.length||shown.length!==0;
@@ -152,6 +153,8 @@ function route(){
   if(currentView==='runtimes')loadRuntimes();if(currentView==='application')loadApplication();
  }
  if(currentView==='activity'){loadTaskHistory();$('activity-empty').hidden=!!currentTask;if(currentTask){taskDismissed=false;$('task-panel').hidden=false;}}
+ $('toolbar-title').textContent=currentView==='detail'?(projects.find(p=>p.id===toolProject)?.name||'Project'):({projects:'Projects',runtimes:'Runtimes',new:'Create app',add:'Add app',activity:'Activity',application:'Settings'}[currentView]||'Projects');
+ renderSidebar();closeSidebar();
  $('task-panel').hidden=currentView!=='activity'||taskDismissed;
  // Move focus to the new page title for keyboard users without disturbing live refreshes.
  const heading=document.querySelector(`[data-view="${currentView}"] h1`);if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
@@ -457,3 +460,16 @@ $('create-starter').addEventListener('change',()=>{$('create-vite').checked=$('c
 async function loadTaskHistory(id=''){const target=$(id?'project-task-history':'activity-history');try{const tasks=await request(id?'/api/projects/'+id+'/tasks':'/api/task-history');if(id&&id!==toolProject)return;updateHTML(target,tasks.length?tasks.map(t=>`<button class="task-history-row" data-task-id="${escape(t.id)}"><span><strong>${escape(t.label||t.kind)}</strong><small>${escape(t.project_name|| (t.project_id?projects.find(p=>p.id===t.project_id)?.name||'Project':'Workspace'))} · ${escape(new Date(t.started_utc).toLocaleString())}</small></span><span class="badge ${escape(t.status)}">${escape(t.status)}</span><span aria-hidden="true">↗</span></button>`).join(''):'<p class="muted">No tasks yet. Each command gets its own named log.</p>');}catch(e){target.textContent=e.message;}}
 
 $('progress-cancel').addEventListener('click',async()=>{if(!progressTask)return;$('progress-cancel').disabled=true;try{await post('/api/tasks/'+progressTask+'/cancel',{});watchTask(progressTask);}catch(e){toast(e.message,true);$('progress-cancel').disabled=false;}});
+
+function renderSidebar(){
+ updateHTML($('sidebar-projects'),projects.length?projects.map(p=>`<a href="#project/${p.id}/overview"${currentView==='detail'&&toolProject===p.id?' aria-current="page"':''} title="${escape(p.name)}"><i class="dot ${escape(p.status)}" aria-hidden="true"></i><span>${escape(p.name)}</span>${p.operation?.pending?'<small>•••</small>':''}</a>`).join(''):'<p>Add your first app to get started.</p>');
+}
+const sidebarMedia=window.matchMedia('(max-width: 760px)');
+function syncSidebarAccess(){const closed=sidebarMedia.matches&&!document.body.classList.contains('sidebar-open');$('app-sidebar').inert=closed;if(closed)$('app-sidebar').setAttribute('aria-hidden','true');else $('app-sidebar').removeAttribute('aria-hidden');}
+function closeSidebar(){document.body.classList.remove('sidebar-open');$('sidebar-backdrop').hidden=true;$('sidebar-toggle').setAttribute('aria-expanded','false');syncSidebarAccess();}
+$('sidebar-toggle').addEventListener('click',()=>{const open=!document.body.classList.contains('sidebar-open');document.body.classList.toggle('sidebar-open',open);$('sidebar-backdrop').hidden=!open;$('sidebar-toggle').setAttribute('aria-expanded',String(open));syncSidebarAccess();if(open)$('app-sidebar').querySelector('a').focus();});
+$('sidebar-backdrop').addEventListener('click',()=>{closeSidebar();$('sidebar-toggle').focus();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.body.classList.contains('sidebar-open')){closeSidebar();$('sidebar-toggle').focus();}});
+
+sidebarMedia.addEventListener('change',closeSidebar);syncSidebarAccess();
+$('app-sidebar').addEventListener('keydown',event=>{if(event.key!=='Tab'||!sidebarMedia.matches||!document.body.classList.contains('sidebar-open'))return;const items=[...$('app-sidebar').querySelectorAll('a[href],button:not([disabled]),[tabindex="0"]')].filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}});
