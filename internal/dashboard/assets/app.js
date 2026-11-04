@@ -6,6 +6,7 @@ let csrf='',projects=[],fetching=false,logRequest,searchTimer;
 let currentView='projects',detailTab='overview',settingsGroup='connection',lastRoute='#projects';
 let settingsDirty=false,environmentDirty=false,environmentLoaded=false,environmentLoading=false,settingsLoading=false,savingSettings=false,savingEnvironment=false,taskDismissed=false;
 const localBusy=new Set();
+const observedOperations=new Map();
 const telemetry={signature:'',cpu:[],memory:[]};
 const attention=['failed','crashed','unresponsive','unknown'];
 const projectTabs=['overview','configuration','environment','actions','logs'];
@@ -16,7 +17,8 @@ function applyTheme(){document.documentElement.dataset.theme=appearance==='syste
 applyTheme();
 $('theme').addEventListener('change',()=>{appearance=$('theme').value;try{localStorage.setItem('laraserve-appearance',appearance);document.cookie=`laraserve-appearance=${appearance}; Max-Age=31536000; Path=/; SameSite=Strict`;}catch{}applyTheme();});
 mediaTheme.addEventListener('change',()=>{if(appearance==='system')applyTheme();});
-function message(text,error=false){$('notice').textContent=text;$('notice').hidden=!text;$('notice').classList.toggle('danger',error);}
+function toast(text,error=false){if(!text)return;if([...$('toast-stack').children].some(item=>item.dataset.message===text))return;while($('toast-stack').children.length>=4)$('toast-stack').firstElementChild.remove();const item=document.createElement('div');item.className='toast '+(error?'toast-error':'');item.dataset.message=text;item.setAttribute('role',error?'alert':'status');const content=document.createElement('span');content.textContent=text;const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','Dismiss notification');close.onclick=()=>item.remove();item.append(content,close);$('toast-stack').append(item);if(!error)setTimeout(()=>item.remove(),6500);}
+function message(text,error=false){toast(text,error);}
 function setFormEnabled(id,enabled){for(const el of $(id).elements)el.disabled=!enabled;LaraControls.sync();}
 function updateHTML(el,html){if(el.innerHTML!==html)el.innerHTML=html;}
 function safeLink(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{return '';}}
@@ -33,7 +35,7 @@ function projectActions(p,compact=false){
 function projectRow(p){
  const running=p.services?.filter(s=>s.state==='running'||s.state==='ready').length||0;
  const framework=p.laravel?escape(p.laravel.replace(/^v(?=\d)/,'')):'—';
- return `<tr data-project="${p.id}"><td><div class="directory-identity"><span class="project-avatar">${escape(p.name.slice(0,1).toUpperCase())}</span><div><a class="project-name" href="#project/${p.id}/overview">${escape(p.name)}</a><span class="source-path" title="${escape(p.source)}">${escape(p.source)}</span></div></div></td><td><span class="mobile-field">Laravel </span><span class="framework-version" title="${escape(p.laravel_source||'Version unavailable')}">${framework}</span><span class="version-source">${p.laravel?(p.laravel_source==='composer.lock'?'Locked':'Constraint'):'Not detected'}</span></td><td><div class="stack-label">PHP ${escape(p.php||'Auto')}</div><span class="muted">${escape(p.database||'Auto database')}</span></td><td><span class="service-count">${p.services?.length?`${running} / ${p.services.length} running`:'None tracked'}</span></td><td>${badge(p.status)}${p.error||p.operation?.error?'<span class="row-error">Check project details</span>':''}</td><td><div class="row-actions">${projectActions(p,true)}</div></td></tr>`;
+ return `<tr data-project="${p.id}"><td><div class="directory-identity"><span class="project-avatar">${escape(p.name.slice(0,1).toUpperCase())}</span><div><a class="project-name" href="#project/${p.id}/overview">${escape(p.name)}</a>${p.startup?'<span class="startup-label">At startup</span>':''}<span class="source-path" title="${escape(p.source)}">${escape(p.source)}</span></div></div></td><td><span class="mobile-field">Laravel </span><span class="framework-version" title="${escape(p.laravel_source||'Version unavailable')}">${framework}</span><span class="version-source">${p.laravel?(p.laravel_source==='composer.lock'?'Locked':'Constraint'):'Not detected'}</span></td><td><div class="stack-label">PHP ${escape(p.php||'Auto')}</div><span class="muted">${escape(p.database||'Auto database')}</span></td><td><span class="service-count">${p.services?.length?`${running} / ${p.services.length} running`:'None tracked'}</span></td><td>${badge(p.status)}${p.error||p.operation?.error?'<span class="row-error">Check project details</span>':''}</td><td><div class="row-actions">${projectActions(p,true)}<button class="button remove-control" data-remove="${p.id}" aria-label="Remove ${escape(p.name)}" title="Remove ${escape(p.name)}"${p.operation?.pending||localBusy.has(p.id)?' disabled':''}>×</button></div></td></tr>`;
 }
 function recordTelemetry(){
  const measured=projects.filter(p=>p.resources.available),signature=measured.map(p=>p.id).sort().join('|');
@@ -94,15 +96,16 @@ function render(){
   }
   $('log-project').dataset.signature=signature;
  }
- if(currentView==='detail')renderDetail();
+ if(currentView==='detail')renderDetail();if($('uninstall-dialog').open)validateUninstall();
  LaraControls.sync();
 }
 function renderDetail(){
  const p=projects.find(p=>p.id===toolProject);if(!p)return;
  $('tools-title').textContent=p.name;$('detail-icon').textContent=p.name.slice(0,1).toUpperCase();
+ if(!startupBusy.has(p.id)){$('project-startup').checked=!!p.startup;$('project-startup').disabled=!!p.operation?.pending;}$('project-startup-note').textContent='For startup at sign-in, enable Launch LaraServe at login in Settings.';
  $('detail-path').textContent=p.source;$('detail-path').title=p.source;
  updateHTML($('detail-status'),`<i class="dot ${escape(p.status)}"></i>${escape(p.status)}`);$('detail-status').className='badge '+p.status;
- updateHTML($('detail-actions'),projectActions(p));$('project-switcher').value=p.id;
+ updateHTML($('detail-actions'),projectActions(p)+(p.admin_url?`<a class="button" href="${escape(p.admin_url)}" target="_blank" rel="noopener noreferrer">Open phpMyAdmin ↗</a>`:'<button class="button" disabled title="Start this project with private MySQL and phpMyAdmin enabled">Open phpMyAdmin ↗</button>'));$('project-switcher').value=p.id;
  const error=p.error||p.operation?.error||'';$('project-error').textContent=error;$('project-error').hidden=!error;
  $('overview-health').textContent=p.health;
  const c=configDocument?.config;
@@ -121,16 +124,16 @@ function selectSettingsGroup(name){
  document.querySelectorAll('[data-setting-section]').forEach(el=>el.hidden=el.dataset.settingSection!==settingsGroup);
  document.querySelectorAll('[data-settings-group]').forEach(el=>el.setAttribute('aria-pressed',String(el.dataset.settingsGroup===settingsGroup)));
 }
-function hasDraft(){return settingsDirty||environmentDirty;}
+function hasDraft(){return settingsDirty||environmentDirty||applicationDirty;}
 function route(){
  if(!csrf)return;
  const hash=location.hash||'#projects',parts=hash.slice(1).split('/');
  const isProject=parts[0]==='project'&&/^[a-f0-9]{12}$/.test(parts[1]||'');
  const changesProject=!isProject||parts[1]!==toolProject;
- if(savingSettings||savingEnvironment||(changesProject&&hasDraft()&&!confirm('Discard your unsaved project changes?'))){history.replaceState(null,'',lastRoute);$('project-switcher').value=toolProject;return;}
- lastRoute=hash;message('');LaraControls.close();
+ if(uninstalling||applicationSaving||savingSettings||savingEnvironment||(changesProject&&hasDraft()&&!confirm('Discard your unsaved changes?'))){history.replaceState(null,'',lastRoute);$('project-switcher').value=toolProject;return;}
+ lastRoute=hash;applicationDirty=false;message('');LaraControls.close();
  if(changesProject){if(logRequest){logRequest.abort();logRequest=undefined;}settingsDirty=false;environmentDirty=false;toolProject='';configDocument=undefined;environmentDocument=undefined;environmentLoaded=false;environmentLoading=false;toolNotice('');}
- currentView=isProject?'detail':['projects','runtimes','new','add','activity'].includes(parts[0])?parts[0]:'projects';
+ currentView=isProject?'detail':['projects','runtimes','new','add','activity','application'].includes(parts[0])?parts[0]:'projects';
  if(isProject&&!projects.some(p=>p.id===parts[1])){currentView='projects';message('This project is no longer registered.');}
  document.querySelectorAll('[data-view]').forEach(el=>el.hidden=el.dataset.view!==currentView);
  document.querySelectorAll('[data-nav]').forEach(el=>{if(el.dataset.nav===(currentView==='detail'||currentView==='new'||currentView==='add'?'projects':currentView))el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});
@@ -143,8 +146,8 @@ function route(){
   if(detailTab==='logs'){$('log-project').value=parts[1];loadLogs();}
   document.title=`${projects.find(p=>p.id===parts[1]).name} · LaraServe`;
  }else{
-  document.title=`${{projects:'Projects',runtimes:'Runtimes',new:'Create app',add:'Add app',activity:'Activity'}[currentView]} · LaraServe`;
-  if(currentView==='runtimes')loadRuntimes();
+  document.title=`${{projects:'Projects',runtimes:'Runtimes',new:'Create app',add:'Add app',activity:'Activity',application:'Settings'}[currentView]} · LaraServe`;
+  if(currentView==='runtimes')loadRuntimes();if(currentView==='application')loadApplication();
  }
  if(currentView==='activity'){$('activity-empty').hidden=!!currentTask;if(currentTask){taskDismissed=false;$('task-panel').hidden=false;}}
  // Move focus to the new page title for keyboard users without disturbing live refreshes.
@@ -157,8 +160,8 @@ async function request(path,options={}){
  return response.status===202||response.status===204?null:response.json();
 }
 async function refresh(){
- if(fetching||!csrf)return;fetching=true;
- try{projects=await request('/api/projects');recordTelemetry();render();$('updated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+ if(fetching||!csrf||uninstalling)return;fetching=true;
+ try{projects=await request('/api/projects');for(const p of projects){const old=observedOperations.get(p.id),op=p.operation;if(op?.error&&old?.error!==op.error)toast(p.name+': '+op.error,true);else if(old?.pending&&op&&!op.pending&&!op.error)toast(p.name+': '+op.action+' completed');observedOperations.set(p.id,op?{...op}:null);}recordTelemetry();render();$('updated').textContent='Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
  catch(e){message(e.message,true);}finally{fetching=false;}
 }
 async function loadLogs(){
@@ -175,10 +178,11 @@ async function loadLogs(){
 }
 document.querySelector('.skip-link').addEventListener('click',event=>{event.preventDefault();$('main-content').focus();$('main-content').scrollIntoView();});
 document.addEventListener('click',async event=>{
+ const remove=event.target.closest('[data-remove]');if(remove){openRemove(remove.dataset.remove);return;}
  const button=event.target.closest('[data-action]');if(!button)return;
  const id=button.dataset.id,action=button.dataset.action;
  if(localBusy.has(id))return;
- localBusy.add(id);render();message('');
+ localBusy.add(id);render();message(action==='stop'?'Stopping project…':action==='restart'?'Restarting project…':'Starting project…');
  try{await post(`/api/projects/${id}/${action}`,{});}catch(e){message(e.message,true);}finally{localBusy.delete(id);await refresh();}
 });
 $('refresh').addEventListener('click',()=>{message('');refresh();});
@@ -193,8 +197,8 @@ $('settings-form').addEventListener('invalid',event=>{const section=event.target
 $('settings-form').addEventListener('input',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
 $('settings-form').addEventListener('change',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
 $('environment-form').addEventListener('input',()=>{environmentDirty=true;toolNotice('');});
-document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{$('action-kind').value='artisan';$('action-command').value=button.dataset.command;$('action-args').value='';$('schema-confirm').checked=false;LaraControls.sync();$('action-command').focus();}));
-window.addEventListener('beforeunload',event=>{if(hasDraft()||savingSettings||savingEnvironment){event.preventDefault();event.returnValue='';}});
+document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{$('action-kind').value=button.dataset.tool||'artisan';$('action-command').value=button.dataset.command;$('action-args').value=button.dataset.args||'';$('schema-confirm').checked=false;LaraControls.sync();$('action-command').focus();}));
+window.addEventListener('beforeunload',event=>{if(hasDraft()||savingSettings||savingEnvironment||applicationSaving||uninstalling){event.preventDefault();event.returnValue='';}});
 window.addEventListener('hashchange',()=>{if(/^[a-f0-9]{64}$/.test(location.hash.slice(1)))connect();else route();});
 async function connect(){
  const token=location.hash.slice(1);if(/^[a-f0-9]{64}$/.test(token))history.replaceState(null,'','#projects');
@@ -210,7 +214,7 @@ const changedVariables = new Map();
 const phpFields=['memory_limit','max_execution_time','upload_max_filesize','post_max_size','date.timezone','display_errors'];
 function post(path, body) {return request(path,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify(body)});}
 async function loadCatalog(){catalog=await request('/api/catalog');for(const kind of ['php','mysql'])$(kind+'-versions').innerHTML=catalog[kind].map(version=>`<option value="${escape(version)}"></option>`).join('');runtimeVersions();let previous;try{previous=sessionStorage.getItem('laraserve-task');}catch{}if(previous&&/^[a-f0-9]{12}$/.test(previous)&&!currentTask)watchTask(previous);}
-function toolNotice(text,error=false){$('tools-notice').textContent=text;$('tools-notice').hidden=!text;$('tools-notice').classList.toggle('danger',error);}
+function toolNotice(text,error=false){toast(text,error);}
 async function openTools(id){
  const p=projects.find(p=>p.id===id);
  if(!p)return;
@@ -256,23 +260,24 @@ $('environment-form').addEventListener('submit',async event=>{event.preventDefau
 // Tokenize arguments without a shell. Quoted groups are supported; no expansion.
 function argumentsList(text){const result=[];let word='',quote='',escaped=false,started=false;for(const c of text){if(escaped){word+=c;escaped=false;started=true;}else if(c==='\\'&&quote!=="'"){escaped=true;started=true;}else if(quote){if(c===quote)quote='';else word+=c;}else if(c==='"'||c==="'"){quote=c;started=true;}else if(/\s/.test(c)){if(started){result.push(word);word='';started=false;}}else{word+=c;started=true;}}if(escaped||quote)throw new Error('Close the quote or escape in the arguments.');if(started)result.push(word);return result;}
 $('action-kind').addEventListener('change',()=>{$('action-command').value=$('action-kind').value==='artisan'?'about':'install';$('schema-confirm').checked=false;});
-$('action-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('action-form',false);try{const args=[$('action-command').value.trim(),...argumentsList($('action-args').value)];const task=await post(`/api/projects/${toolProject}/tasks`,{kind:$('action-kind').value,args,confirm_schema:$('schema-confirm').checked});$('schema-confirm').checked=false;watchTask(task.id);$('task-panel').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){toolNotice(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('action-form',true);}});
+$('action-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('action-form',false);try{const args=[$('action-command').value.trim(),...argumentsList($('action-args').value)];const task=await post(`/api/projects/${toolProject}/tasks`,{kind:$('action-kind').value,args,confirm_schema:$('schema-confirm').checked});$('schema-confirm').checked=false;openProgress(task);watchTask(task.id);}catch(e){toolNotice(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('action-form',true);}});
 async function watchTask(id,reveal=true){
  currentTask=id;try{sessionStorage.setItem('laraserve-task',id);}catch{}clearTimeout(taskTimer);if(reveal)taskDismissed=false;$('task-panel').hidden=taskDismissed;$('activity-empty').hidden=true;
  try{const task=await request(`/api/tasks/${id}`);if(currentTask!==id)return;
   $('task-title').textContent=task.kind+' · '+task.id;$('task-status').textContent=task.status+(task.exit_code>=0?' · exit '+task.exit_code:'')+(task.error?' · '+task.error:'');
   const output=$('task-output'),atBottom=output.scrollHeight-output.scrollTop-output.clientHeight<35;output.textContent=task.output||'Waiting for output…';if(atBottom)output.scrollTop=output.scrollHeight;
   const running=['queued','running','recovering'].includes(task.status);$('activity-dot').hidden=!running;$('cancel-task').disabled=!running||task.status==='recovering';
+  updateProgress(task,running);
   if(running)taskTimer=setTimeout(()=>watchTask(id,false),700);else{await refresh();}
  }catch(e){$('task-status').textContent=e.message;}
 }
 $('cancel-task').addEventListener('click',async()=>{if(!currentTask)return;try{await post(`/api/tasks/${currentTask}/cancel`,{});watchTask(currentTask);}catch(e){message(e.message,true);}});
-$('create-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('create-form',false);try{const task=await post('/api/create',{path:$('create-path').value.trim(),starter:$('create-starter').value,database:$('create-database').value,php:$('create-php').value.trim(),version:$('create-version').value.trim(),migrate:$('create-migrate').checked});watchTask(task.id);$('task-panel').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){message(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('create-form',true);}});
+$('create-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('create-form',false);try{const task=await post('/api/create',{path:$('create-path').value.trim(),starter:$('create-starter').value,database:$('create-database').value,domain:$('create-domain').value.trim().toLowerCase(),port:$('create-port').value?Number($('create-port').value):0,https:$('create-https').checked,vite:$('create-vite').checked,migrate:$('create-migrate').checked});openProgress(task);watchTask(task.id);}catch(e){message(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('create-form',true);}});
 function runtimeVersions(){$('runtime-version').innerHTML=[...(catalog[$('runtime-kind').value]||[])].reverse().map(v=>`<option value="${escape(v)}">${escape(v)}</option>`).join('');LaraControls.sync();}
 async function loadRuntimes(){try{const data=await request('/api/runtimes');$('runtime-list').innerHTML=data.installed.length?data.installed.map(entry=>`<div class="runtime-entry"><div><code>${escape(entry.key)}</code><p>${bytes(entry.bytes)} · ${escape(entry.reason||'Unreferenced published cache')}</p></div>${entry.protected?'':`<button class="button" data-remove-cache="${escape(entry.key)}">Remove</button>`}</div>`).join(''):'<p>No published runtimes in the cache yet.</p>';}catch(e){message(e.message,true);}}
 $('runtime-kind').addEventListener('change',runtimeVersions);
 $('refresh-runtimes').addEventListener('click',loadRuntimes);
-$('runtime-install').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('runtime-install',false);try{const task=await post('/api/runtimes/install',{kind:$('runtime-kind').value,version:$('runtime-version').value});watchTask(task.id);$('task-panel').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){message(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('runtime-install',true);}});
+$('runtime-install').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('runtime-install',false);try{const task=await post('/api/runtimes/install',{kind:$('runtime-kind').value,version:$('runtime-version').value});openProgress(task);watchTask(task.id);}catch(e){message(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('runtime-install',true);}});
 $('runtime-list').addEventListener('click',async event=>{const button=event.target.closest('[data-remove-cache]');if(!button)return;if(!confirm('Remove this unreferenced runtime cache? Projects and databases will be kept.'))return;try{await post('/api/runtimes/remove',{key:button.dataset.removeCache,confirm:true});await loadRuntimes();}catch(e){message(e.message,true);}});
 $('dismiss-task').addEventListener('click',()=>{
  taskDismissed=true;$('task-panel').hidden=true;
@@ -342,10 +347,95 @@ $('add-app-form').addEventListener('submit',async event=>{
  event.target.dataset.pending='true';setFormEnabled('add-app-form',false);$('add-app-notice').hidden=true;
  try{
   const project=await post('/api/projects/add',{path:$('existing-path').value.trim()});
-  await refresh();location.hash=`project/${project.id}/overview`;
- }catch(e){$('add-app-notice').textContent=e.message;$('add-app-notice').hidden=false;}
+  await refresh();toast("App added. Configure its connection and services.");location.hash=`project/${project.id}/configuration/connection`;
+ }catch(e){toast(e.message,true);}
  finally{delete event.target.dataset.pending;setFormEnabled('add-app-form',true);}
+});
+
+let applicationDocument,applicationInfo,applicationDirty=false,applicationSaving=false,uninstalling=false,removePending=false,removeProjectId='';
+const startupBusy=new Set();
+function appNotice(text,error=false){toast(text,error);}
+function showUpdate(result){
+ $('app-version').textContent=result.current||applicationInfo?.version||'';
+ $('latest-version').textContent=result.latest?'Latest published '+result.latest:'';
+ $('update-message').textContent=result.message;$('update-checked').textContent=result.checked?'Last checked '+new Date(result.checked).toLocaleString():'';
+}
+async function loadApplication(){
+ appNotice('Loading preferences…');setFormEnabled('application-form',false);
+ try{
+  applicationInfo=await request('/api/application');applicationDocument=applicationInfo.settings;const c=applicationDocument.config;
+  $('app-login').checked=c.launch_at_login;$('app-open').checked=c.open_dashboard;$('app-updates').checked=c.check_updates;
+  $('app-platform').textContent=applicationInfo.platform;$('app-home').textContent=applicationInfo.home;$('app-executable').textContent=applicationInfo.executable;$('app-login-path').textContent=applicationInfo.login_path||'Not available on this platform';
+  $('uninstalled-executable').textContent=applicationInfo.executable;
+  showUpdate(applicationInfo.updates);applicationDirty=false;$('application-save-state').textContent='Startup options apply on your next launch or login.';setFormEnabled('application-form',true);$('app-login').disabled=!applicationInfo.login_supported;appNotice('');
+ }catch(e){appNotice(e.message,true);}
+}
+$('application-form').addEventListener('change',()=>{applicationDirty=true;$('application-save-state').textContent='Unsaved preferences';appNotice('');});
+$('application-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(!applicationDocument||applicationSaving)return;
+ applicationSaving=true;setFormEnabled('application-form',false);
+ try{
+  applicationDocument=await post('/api/application',{revision:applicationDocument.revision,config:{launch_at_login:$('app-login').checked,open_dashboard:$('app-open').checked,check_updates:$('app-updates').checked}});
+  applicationDirty=false;$('application-save-state').textContent='Preferences saved';appNotice('Saved. Selected apps start on the next LaraServe launch; login changes apply when you next sign in.');
+ }catch(e){appNotice(e.message,true);}finally{applicationSaving=false;setFormEnabled('application-form',true);}
+});
+$('reload-application').addEventListener('click',()=>{if(!applicationDirty||confirm('Discard your unsaved preferences and reload?'))loadApplication();});
+$('check-updates').addEventListener('click',async()=>{
+ const button=$('check-updates');button.disabled=true;button.textContent='Checking…';
+ try{showUpdate(await post('/api/application/updates',{}));toast($('update-message').textContent);}catch(e){$('update-message').textContent=e.message;toast(e.message,true);}finally{button.disabled=false;button.textContent='↻ Check for updates';}
+});
+$('project-startup').addEventListener('change',async()=>{
+ const id=toolProject,enabled=$('project-startup').checked;if(startupBusy.has(id))return;
+ startupBusy.add(id);$('project-startup').disabled=true;
+ try{await post(`/api/projects/${id}/startup`,{enabled});const p=projects.find(p=>p.id===id);if(p)p.startup=enabled;render();toast(enabled?'Project will run when LaraServe starts.':'Project startup disabled.');}
+ catch(e){toolNotice(e.message,true);}finally{startupBusy.delete(id);await refresh();}
+});
+function openRemove(id){
+ const p=projects.find(p=>p.id===id);if(!p)return;removeProjectId=id;
+ $('remove-title').textContent='Remove '+p.name+'?';$('remove-description').textContent='Remove this app from your LaraServe workspace.'+((id===toolProject&&hasDraft())?' Unsaved edits for this project will be discarded.':'');$('remove-path').textContent=p.source;$('remove-error').hidden=true;$('confirm-remove').disabled=false;$('confirm-remove').textContent='Remove project';$('remove-dialog').showModal();
+}
+$('remove-current-project').addEventListener('click',()=>openRemove(toolProject));
+$('cancel-remove').addEventListener('click',()=>{if(!removePending)$('remove-dialog').close();});
+$('remove-dialog').addEventListener('cancel',event=>{if(removePending)event.preventDefault();});
+$('confirm-remove').addEventListener('click',async()=>{
+ if(removePending)return;const id=removeProjectId;removePending=true;localBusy.add(id);render();$('confirm-remove').disabled=true;$('cancel-remove').disabled=true;$('confirm-remove').textContent='Stopping & removing…';
+ function finish(error){removePending=false;localBusy.delete(id);$('cancel-remove').disabled=false;if(error){$('remove-error').textContent=error;$('remove-error').hidden=false;$('confirm-remove').disabled=false;$('confirm-remove').textContent='Try again';render();}else{$('remove-dialog').close();toast('Project removed. Its files and private data were kept.');if(toolProject===id){settingsDirty=false;environmentDirty=false;toolProject='';location.hash='projects';}render();}}
+ try{
+  await post(`/api/projects/${id}/remove`,{confirm:true});
+  let attempts=0;
+  const poll=async()=>{try{await refresh();const p=projects.find(p=>p.id===id);if(!p){finish();return;}if(p.operation?.error&&!p.operation.pending){finish(p.operation.error);return;}if(++attempts>180){finish('Removal is taking longer than expected. Check the project status before retrying.');return;}setTimeout(poll,700);}catch(e){finish(e.message);}};
+  poll();
+ }catch(e){finish(e.message);}
+});
+function validateUninstall(){
+ const active=projects.filter(p=>['running','starting','stopping','unresponsive'].includes(p.status)).length;
+ $('uninstall-blocker').textContent=active?`Stop ${active} active ${active===1?'project':'projects'} before uninstalling.`:'All projects are stopped. Finish any running tasks before proceeding.';
+ $('confirm-uninstall').disabled=uninstalling||active>0||!$('uninstall-data').checked||$('uninstall-confirm').value!=='UNINSTALL';
+}
+$('open-uninstall').addEventListener('click',()=>{$('uninstall-error').hidden=true;$('uninstall-confirm').value='';$('uninstall-data').checked=false;validateUninstall();$('uninstall-dialog').showModal();});
+$('uninstall-form').addEventListener('input',validateUninstall);
+$('cancel-uninstall').addEventListener('click',()=>{if(!uninstalling)$('uninstall-dialog').close();});
+$('uninstall-dialog').addEventListener('cancel',event=>{if(uninstalling)event.preventDefault();});
+$('uninstall-form').addEventListener('submit',async event=>{
+ event.preventDefault();validateUninstall();if($('confirm-uninstall').disabled)return;
+ uninstalling=true;$('confirm-uninstall').disabled=true;$('cancel-uninstall').disabled=true;$('confirm-uninstall').textContent='Uninstalling…';
+ try{
+  await post('/api/application/uninstall',{confirm:$('uninstall-confirm').value,delete_managed_data:$('uninstall-data').checked});
+  const poll=async()=>{try{
+   const result=await request('/api/application/uninstall-status');
+   if(result.pending){setTimeout(poll,500);return;}
+   if(result.complete){csrf='';clearTimeout(taskTimer);$('uninstall-dialog').close();$('workspace').hidden=true;$('locked').hidden=true;$('uninstalled').hidden=false;return;}
+   throw new Error(result.error||'Uninstall did not complete.');
+  }catch(e){uninstalling=false;$('uninstall-error').textContent=e.message;$('uninstall-error').hidden=false;$('cancel-uninstall').disabled=false;$('confirm-uninstall').textContent='Uninstall';validateUninstall();}};poll();
+ }catch(e){uninstalling=false;$('uninstall-error').textContent=e.message;$('uninstall-error').hidden=false;$('cancel-uninstall').disabled=false;$('confirm-uninstall').textContent='Uninstall';validateUninstall();}
 });
 
 LaraControls.enhance();
 connect();
+
+let progressTask='',progressProject='',progressComplete=false;
+function openProgress(task){progressTask=task.id;progressProject='';progressComplete=false;$('progress-title').textContent=task.kind==='create'?'Creating your app':'Running '+task.kind;$('progress-status').textContent='Preparing…';$('progress-output').textContent='Waiting for output…';$('progress-indicator').hidden=false;$('progress-project').hidden=true;if(!$('progress-dialog').open)$('progress-dialog').showModal();}
+function updateProgress(task,running){if(progressTask!==task.id)return;const output=$('progress-output');const bottom=output.scrollHeight-output.scrollTop-output.clientHeight<50;output.textContent=task.output||'Waiting for output…';if(bottom)output.scrollTop=output.scrollHeight;$('progress-status').textContent=task.status+(task.error?' · '+task.error:'');$('progress-indicator').hidden=!running;if(!running&&!progressComplete){progressComplete=true;toast(task.exit_code===0?'Task completed':(task.error||'Task failed. Review the activity log.'),task.exit_code!==0);if(task.kind==='create'&&task.exit_code===0&&task.project_id){progressProject=task.project_id;$('progress-project').hidden=false;refresh().then(()=>{if(progressTask===task.id){$('progress-dialog').close();location.hash='#project/'+progressProject+'/configuration/connection';}});}}}
+$('progress-close').addEventListener('click',()=>$('progress-dialog').close());
+$('progress-project').addEventListener('click',()=>{$('progress-dialog').close();location.hash='#project/'+progressProject+'/configuration/connection';});
+$('create-starter').addEventListener('change',()=>{$('create-vite').checked=$('create-starter').value!=='none';});
