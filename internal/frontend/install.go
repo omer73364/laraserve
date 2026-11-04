@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 func NeedsVite(root string) bool {
@@ -76,7 +77,7 @@ func EnsureDependencies(ctx context.Context, cache, root, stateDir string) (*run
 	output := &activity.Output{Destination: os.Stdout}
 	cmd.Stdout, cmd.Stderr = output, output
 	if e = process.RunOwned(cmd); e != nil {
-		return nil, fmt.Errorf("%s install failed: %w", manager, output.Error(e))
+		return nil, dependencyInstallError(manager, output.Error(e))
 	}
 	// A freshly generated lock can reveal stricter build-tool engine constraints.
 	compatible, e := Select(cache, root)
@@ -115,6 +116,14 @@ func EnsureDependencies(ctx context.Context, cache, root, stateDir string) (*run
 		return nil, e
 	}
 	return node, nil
+}
+
+func dependencyInstallError(manager string, err error) error {
+	text := err.Error()
+	if manager == "npm" && (strings.Contains(text, "ERESOLVE") || strings.Contains(text, "Could not resolve dependency:")) {
+		return fmt.Errorf("npm dependency conflict: packages require incompatible peer dependency versions. Check the package and required version below and align them in package.json. Changing Node alone will not fix this. For an older app known to work with legacy npm, you can opt in by adding legacy-peer-deps=true to the project's .npmrc; this ignores peer dependency checks and does not fix incompatibilities. Details: %w", err)
+	}
+	return fmt.Errorf("%s install failed: %w", manager, err)
 }
 
 func HasPackage(root string) bool {
