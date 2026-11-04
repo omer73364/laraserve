@@ -25,6 +25,7 @@ import (
 )
 
 type State struct {
+	AdminURL   string `json:"admin_url,omitempty"`
 	ID         string `json:"id"`
 	Generation string `json:"generation"`
 	PID        int    `json:"pid"`
@@ -296,4 +297,31 @@ func States(home string) ([]State, error) {
 		states = append(states, state)
 	}
 	return states, nil
+}
+
+// WithStopped stops the current generation and excludes a replacement owner
+// while a reversible registration operation completes.
+func WithStopped(ctx context.Context, home, id string, fn func() error) error {
+	if err := Stop(ctx, home, id); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(directory(home), 0700); err != nil {
+		return err
+	}
+	release, ok, err := filelock.Try(lockFile(home, id))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("project restarted while removing; retry after stopping it")
+	}
+	defer release()
+	return fn()
+}
+
+func (s *Session) SetAdminURL(url string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.state.AdminURL = url
+	return projects.WriteJSON(s.file, &s.state)
 }

@@ -14,6 +14,9 @@ import (
 )
 
 func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
+	if s.applicationTools(w, r) {
+		return true
+	}
 	if s.workspaceTools(w, r) {
 		return true
 	}
@@ -128,6 +131,24 @@ func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *projects.Project, tool string) bool {
 	switch tool {
+	case "startup":
+		if r.Method != "POST" {
+			http.Error(w, "method not allowed", 405)
+			return true
+		}
+		var input struct {
+			Enabled bool `json:"enabled"`
+		}
+		if decode(w, r, &input) != nil {
+			http.Error(w, "invalid startup preference", 400)
+			return true
+		}
+		if err := s.projectStartup(r.Context(), p.ID, input.Enabled); err != nil {
+			http.Error(w, err.Error(), 409)
+		} else {
+			w.WriteHeader(204)
+		}
+		return true
 	case "settings":
 		_, err := projecttools.SettingsRoot(p)
 		if err != nil {
@@ -196,7 +217,7 @@ func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *project
 	case "tasks":
 		if r.Method == "POST" {
 			var input projecttools.TaskRequest
-			if err := decode(w, r, &input); err != nil || input.Kind != "artisan" && input.Kind != "composer" {
+			if err := decode(w, r, &input); err != nil || input.Kind != "artisan" && input.Kind != "composer" && input.Kind != "npm" {
 				http.Error(w, "choose Artisan or Composer", 400)
 				return true
 			}

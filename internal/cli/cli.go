@@ -79,6 +79,14 @@ func Run(args []string) int {
 			ui.Err("%v", e)
 			return 1
 		}
+		if args[0] == "uninstall" {
+			auto, e := filelock.Acquire(context.Background(), filepath.Join(home.Root, "auto-launch.lock"))
+			if e != nil {
+				ui.Err("%v", e)
+				return 1
+			}
+			defer auto()
+		}
 		release, e := filelock.Acquire(context.Background(), filepath.Join(home.Root, "startup.lock"))
 		if e != nil {
 			ui.Err("%v", e)
@@ -87,6 +95,8 @@ func Run(args []string) int {
 		defer release()
 	}
 	switch args[0] {
+	case "__autostart":
+		err = cmdAutostart(args[1:])
 	case "__project-task":
 		if len(args) != 2 {
 			err = fmt.Errorf("invalid task invocation")
@@ -204,8 +214,9 @@ func yesFlags(fs *flag.FlagSet) *bool {
 }
 
 type ctx struct {
-	home *paths.Home
-	man  *manifest.Manifest
+	autoSetup bool
+	home      *paths.Home
+	man       *manifest.Manifest
 }
 
 func load() (*ctx, error) {

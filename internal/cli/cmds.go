@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"laraserve/internal/appsettings"
 	"laraserve/internal/detect"
 	"laraserve/internal/hosts"
 	"laraserve/internal/pack"
@@ -229,6 +230,10 @@ func cmdUninstall(args []string) error {
 		} else {
 			ui.OK("Local CA removed from the system trust store")
 		}
+	}
+	exe, _ := os.Executable()
+	if err := appsettings.SetLogin(c.home.Root, exe, false); err != nil {
+		return fmt.Errorf("remove login startup: %w", err)
 	}
 	if err := os.RemoveAll(c.home.Root); err != nil {
 		return err

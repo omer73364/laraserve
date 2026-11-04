@@ -26,13 +26,19 @@ func RegisterExisting(home, source string) (*projects.Project, error) {
 		return nil, fmt.Errorf("choose a project folder, not a file")
 	}
 	store := projects.New(home)
-	records, err := store.List()
+	records, err := store.All()
 	if err != nil {
 		return nil, err
 	}
 	for _, existing := range records {
 		canonical, err := projects.Canonical(existing.Source)
 		if err == nil && canonical == root {
+			if existing.Removed {
+				existing.Removed = false
+				if err = store.Save(existing); err != nil {
+					return nil, err
+				}
+			}
 			return existing, nil
 		}
 	}

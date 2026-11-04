@@ -17,9 +17,11 @@ import (
 	"sync"
 	"time"
 
+	"laraserve/internal/appsettings"
 	"laraserve/internal/devservice"
 	"laraserve/internal/metrics"
 	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/supervisor"
 )
 
@@ -32,6 +34,8 @@ type Operation struct {
 	Error   string `json:"error,omitempty"`
 }
 type View struct {
+	AdminURL      string              `json:"admin_url,omitempty"`
+	Startup       bool                `json:"startup"`
 	Laravel       string              `json:"laravel"`
 	LaravelSource string              `json:"laravel_source"`
 	Services      []devservice.Status `json:"services,omitempty"`
@@ -48,6 +52,9 @@ type View struct {
 	Resources     metrics.Sample      `json:"resources"`
 }
 type Server struct {
+	finished                                    chan struct{}
+	maintenance                                 bool
+	uninstall                                   uninstallState
 	home, host, origin, bootstrap, cookie, csrf string
 	ctx                                         context.Context
 	mu                                          sync.Mutex
@@ -62,7 +69,7 @@ func New(ctx context.Context, home, address string) (*Server, error) {
 	if err != nil || host != "127.0.0.1" {
 		return nil, fmt.Errorf("dashboard requires IPv4 loopback")
 	}
-	return &Server{home: home, host: address, origin: "http://" + address, bootstrap: supervisor.NewID() + supervisor.NewID(), cookie: supervisor.NewID() + supervisor.NewID(), csrf: supervisor.NewID(), ctx: ctx, operations: map[string]Operation{}, sampler: metrics.New()}, nil
+	return &Server{home: home, host: address, origin: "http://" + address, bootstrap: supervisor.NewID() + supervisor.NewID(), cookie: supervisor.NewID() + supervisor.NewID(), csrf: supervisor.NewID(), ctx: ctx, operations: map[string]Operation{}, sampler: metrics.New(), finished: make(chan struct{})}, nil
 }
 func (s *Server) URL() string { return s.origin + "/#" + s.bootstrap }
 func equal(a, b string) bool  { return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1 }
@@ -100,6 +107,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.Method != "GET" && (r.Header.Get("Origin") != s.origin || !equal(r.Header.Get("X-CSRF-Token"), s.csrf)) {
 			http.Error(w, "forbidden", 403)
+			return
+		}
+		s.mu.Lock()
+		maintenance := s.maintenance
+		s.mu.Unlock()
+		if maintenance && r.URL.Path != "/api/application/uninstall-status" {
+			http.Error(w, "LaraServe is uninstalling", 410)
 			return
 		}
 		s.api(w, r)
@@ -148,10 +162,19 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "cannot read project registry", 500)
 			return
 		}
+		preferences, e := appsettings.Read(s.home)
+		if e != nil {
+			http.Error(w, e.Error(), 500)
+			return
+		}
 		views := make([]View, 0, len(list))
 		for _, p := range list {
 			state, err := supervisor.Status(s.home, p.ID)
 			v := View{ID: p.ID, Name: p.Name, Source: p.Source, PHP: p.PHP, Database: p.Database, Status: state.Status, Health: "Stopped", URL: safeURL(state.URL)}
+			if state.Status == "running" {
+				v.AdminURL = safeURL(state.AdminURL)
+			}
+			v.Startup = preferences.Config.Projects[p.ID]
 			v.Laravel, v.LaravelSource = laravelVersion(p.Source)
 			if privateID, e := s.privateID(p); e == nil {
 				v.Services = devservice.ReadStatus(filepath.Join(s.home, "projects", privateID), state.Generation, state.Status)
@@ -191,7 +214,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := projects.New(s.home).Load(parts[0])
-	if err != nil {
+	if err != nil || p.Removed {
 		http.Error(w, "project not found", 404)
 		return
 	}
@@ -208,13 +231,25 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	action := parts[1]
-	if r.Method != "POST" || (action != "start" && action != "stop" && action != "restart") {
+	if r.Method != "POST" || (action != "start" && action != "stop" && action != "restart" && action != "remove") {
 		http.NotFound(w, r)
 		return
 	}
 	// Actions deliberately accept no flags, commands, migrations, or filesystem paths.
-	var input struct{}
-	if err := decode(w, r, &input); err != nil {
+	var decodeErr error
+	if action == "remove" {
+		var input struct {
+			Confirm bool `json:"confirm"`
+		}
+		decodeErr = decode(w, r, &input)
+		if !input.Confirm {
+			decodeErr = fmt.Errorf("confirm project removal")
+		}
+	} else {
+		var input struct{}
+		decodeErr = decode(w, r, &input)
+	}
+	if decodeErr != nil {
 		http.Error(w, "expected an empty JSON object", 400)
 		return
 	}
@@ -233,10 +268,12 @@ func (s *Server) perform(p *projects.Project, action string) {
 	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
 	defer cancel()
 	var err error
-	if action == "stop" {
+	if action == "remove" {
+		err = projecttools.RemoveProject(ctx, s.home, p.ID)
+	} else if action == "stop" {
 		err = supervisor.Stop(ctx, s.home, p.ID)
 	} else {
-		args := reusableArgs(p)
+		args := append(reusableArgs(p), "--setup-local")
 		_, err = supervisor.Launch(ctx, supervisor.LaunchRequest{Home: s.home, Project: *p, Args: args, Restart: action == "restart"})
 	}
 	op := Operation{Action: action}
@@ -247,24 +284,7 @@ func (s *Server) perform(p *projects.Project, action string) {
 	s.operations[p.ID] = op
 	s.mu.Unlock()
 }
-func reusableArgs(p *projects.Project) []string {
-	// Registry records are local, but old or hand-edited records must not cause
-	// one-shot actions to be replayed by the dashboard.
-	args := []string{p.Source}
-	for i := 1; i < len(p.Args); i++ {
-		arg := p.Args[i]
-		key, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
-		switch key {
-		case "migrate", "yes", "y", "allow-insecure-dependencies":
-			if !strings.Contains(arg, "=") && i+1 < len(p.Args) && (p.Args[i+1] == "true" || p.Args[i+1] == "false") {
-				i++
-			}
-			continue
-		}
-		args = append(args, arg)
-	}
-	return args
-}
+func reusableArgs(p *projects.Project) []string { return projects.ReusableArgs(p) }
 func safeURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {

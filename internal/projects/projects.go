@@ -20,6 +20,7 @@ import (
 )
 
 type Project struct {
+	Removed  bool     `json:"removed,omitempty"`
 	Schema   int      `json:"schema"`
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
@@ -101,7 +102,9 @@ func (s *Store) Load(id string) (*Project, error) {
 	}
 	return &p, nil
 }
-func (s *Store) List() ([]*Project, error) {
+func (s *Store) List() ([]*Project, error) { return s.list(false) }
+func (s *Store) All() ([]*Project, error)  { return s.list(true) }
+func (s *Store) list(includeRemoved bool) ([]*Project, error) {
 	files, err := os.ReadDir(s.Dir)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -120,7 +123,9 @@ func (s *Store) List() ([]*Project, error) {
 			if err != nil {
 				return nil, fmt.Errorf("read project %s: %w", id, err)
 			}
-			result = append(result, p)
+			if includeRemoved || !p.Removed {
+				result = append(result, p)
+			}
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -133,9 +138,9 @@ func (s *Store) List() ([]*Project, error) {
 }
 func (s *Store) Find(target string) (*Project, error) {
 	if idPattern.MatchString(target) {
-		if p, err := s.Load(target); err == nil {
+		if p, err := s.Load(target); err == nil && !p.Removed {
 			return p, nil
-		} else if !os.IsNotExist(err) {
+		} else if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
 	}
@@ -185,3 +190,41 @@ func (s *Store) Import(p *Project) error {
 }
 
 func ValidID(id string) bool { return idPattern.MatchString(id) }
+
+// Archive keeps a reversible registration tombstone so legacy footprint imports
+// cannot silently re-add a removed project. No source or private data is deleted.
+func (s *Store) Archive(id string) error {
+	if !ValidID(id) {
+		return fmt.Errorf("invalid project identifier")
+	}
+	release, err := filelock.Acquire(context.Background(), filepath.Join(s.Dir, id+".record.lock"))
+	if err != nil {
+		return err
+	}
+	defer release()
+	p, err := s.Load(id)
+	if err != nil {
+		return err
+	}
+	p.Removed = true
+	return s.save(p)
+}
+
+// ReusableArgs excludes one-shot consent and schema-changing options from all
+// dashboard/login restarts. Project files still control the reusable defaults.
+func ReusableArgs(p *Project) []string {
+	args := []string{p.Source}
+	for i := 1; i < len(p.Args); i++ {
+		arg := p.Args[i]
+		key, _, _ := strings.Cut(strings.TrimLeft(arg, "-"), "=")
+		switch key {
+		case "migrate", "yes", "y", "allow-insecure-dependencies":
+			if !strings.Contains(arg, "=") && i+1 < len(p.Args) && (p.Args[i+1] == "true" || p.Args[i+1] == "false") {
+				i++
+			}
+			continue
+		}
+		args = append(args, arg)
+	}
+	return args
+}

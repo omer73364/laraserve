@@ -12,13 +12,16 @@ import (
 	"syscall"
 	"time"
 
+	"laraserve/internal/appsettings"
 	"laraserve/internal/dashboard"
 	"laraserve/internal/paths"
+	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 )
 
 func cmdDashboard(args []string) error {
 	fs := flag.NewFlagSet("dashboard", flag.ContinueOnError)
+	open := fs.Bool("open", false, "open the private dashboard in the default browser")
 	port := fs.Int("port", 0, "local dashboard port (0 selects a free port)")
 	if err := parse(fs, args); err != nil {
 		return err
@@ -48,8 +51,18 @@ func cmdDashboard(args []string) error {
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	ui.Fields("LaraServe dashboard", ui.Field{Label: "Open", Value: handler.URL()}, ui.Field{Label: "Access", Value: "Private to this computer · keep this link private"})
+	go runStartupProjects(ctx, home.Root)
+	if doc, e := appsettings.Read(home.Root); e == nil && doc.Config.CheckUpdates {
+		go func() { _, _ = appsettings.Check(ctx, home.Root, runtime.Version, false) }()
+	}
+	if *open {
+		if e := openDashboardURL(handler.URL()); e != nil {
+			ui.Warn("%v", e)
+		}
+	}
 	ui.Info("Press Ctrl+C to close the dashboard; your projects keep running")
 	select {
+	case <-handler.Done():
 	case <-ctx.Done():
 	case err = <-done:
 		if err != http.ErrServerClosed {

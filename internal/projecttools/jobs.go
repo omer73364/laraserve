@@ -61,12 +61,14 @@ func validateTask(home string, r TaskRequest) error {
 		}
 	}
 	switch r.Kind {
-	case "artisan", "composer":
+	case "artisan", "composer", "npm":
 		if !projects.ValidID(r.ProjectID) {
 			return fmt.Errorf("select a registered project")
 		}
-		if _, err := projects.New(home).Load(r.ProjectID); err != nil {
+		if p, err := projects.New(home).Load(r.ProjectID); err != nil {
 			return err
+		} else if p.Removed {
+			return fmt.Errorf("project was removed from the workspace")
 		}
 		if len(r.Args) == 0 || strings.HasPrefix(r.Args[0], "-") {
 			return fmt.Errorf("choose a command")
@@ -78,6 +80,11 @@ func validateTask(home string, r TaskRequest) error {
 			}
 			if r.Args[0] == "serve" || r.Args[0] == "tinker" || r.Args[0] == "queue:work" || r.Args[0] == "schedule:work" {
 				return fmt.Errorf("interactive or persistent workers are not supported as tasks")
+			}
+		} else if r.Kind == "npm" {
+			command := strings.Join(r.Args, " ")
+			if command != "install" && command != "ci" && command != "run build" && command != "audit" && command != "outdated" {
+				return fmt.Errorf("choose install, ci, run build, audit or outdated")
 			}
 		} else {
 			switch r.Args[0] {
@@ -412,6 +419,17 @@ func RunTaskWorker(home, id string) (result error) {
 	p, err := projects.New(home).Load(request.ProjectID)
 	if err != nil {
 		return err
+	}
+	if request.Kind == "npm" {
+		executable, e := os.Executable()
+		if e != nil {
+			return e
+		}
+		args := append([]string{"npm", p.Root, "--"}, request.Args...)
+		cmd := exec.CommandContext(ctx, executable, args...)
+		cmd.Env = append(os.Environ(), "LARASERVE_HOME="+home)
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		return process.RunOwned(cmd)
 	}
 	state, err := supervisor.Status(home, p.ID)
 	if err != nil {

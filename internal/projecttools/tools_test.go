@@ -134,3 +134,21 @@ func TestInterruptedTasksHoldFilesUntilOwnedCleanupCanFinish(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNPMTasksRejectPersistentAndArbitraryCommands(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	id := "abcdef123456"
+	if err := projects.New(home).Save(&projects.Project{ID: id, Source: root, Root: root}); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"install"}, {"ci"}, {"run", "build"}, {"audit"}, {"outdated"}} {
+		if err := validateTask(home, TaskRequest{ProjectID: id, Kind: "npm", Args: args}); err != nil {
+			t.Fatal(args, err)
+		}
+	}
+	for _, args := range [][]string{{"run", "dev"}, {"exec", "anything"}, {"install", "--prefix=/tmp/other"}, {"run", "build", "--", "--watch"}} {
+		if err := validateTask(home, TaskRequest{ProjectID: id, Kind: "npm", Args: args}); err == nil {
+			t.Fatal("unexpected npm command accepted", args)
+		}
+	}
+}
