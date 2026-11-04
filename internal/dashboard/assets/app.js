@@ -17,7 +17,7 @@ function applyTheme(){document.documentElement.dataset.theme=appearance==='syste
 applyTheme();
 $('theme').addEventListener('change',()=>{appearance=$('theme').value;try{localStorage.setItem('laraserve-appearance',appearance);document.cookie=`laraserve-appearance=${appearance}; Max-Age=31536000; Path=/; SameSite=Strict`;}catch{}applyTheme();});
 mediaTheme.addEventListener('change',()=>{if(appearance==='system')applyTheme();});
-function toast(text,error=false){if(!text)return;if([...$('toast-stack').children].some(item=>item.dataset.message===text))return;while($('toast-stack').children.length>=4)$('toast-stack').firstElementChild.remove();const item=document.createElement('div');item.className='toast '+(error?'toast-error':'');item.dataset.message=text;item.setAttribute('role',error?'alert':'status');const content=document.createElement('span');content.textContent=text;const close=document.createElement('button');close.textContent='×';close.setAttribute('aria-label','Dismiss notification');close.onclick=()=>item.remove();item.append(content,close);$('toast-stack').append(item);if(!error)setTimeout(()=>item.remove(),6500);}
+function toast(text,error=false){LaraNotifications.show(text,error);}
 function message(text,error=false){toast(text,error);}
 function setFormEnabled(id,enabled){for(const el of $(id).elements)el.disabled=!enabled;LaraControls.sync();}
 function updateHTML(el,html){if(el.innerHTML!==html)el.innerHTML=html;}
