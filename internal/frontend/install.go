@@ -8,6 +8,7 @@ import (
 	"laraserve/internal/process"
 	"laraserve/internal/projectconfig"
 	"laraserve/internal/runtime"
+	"laraserve/internal/statefile"
 	"laraserve/internal/versions"
 	"os"
 	"os/exec"
@@ -41,20 +42,17 @@ func EnsureDependencies(ctx context.Context, cache, root, stateDir string) (*run
 	if e != nil {
 		return nil, e
 	}
-	stamp := ""
-	for _, name := range []string{"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"} {
-		b, err := projectconfig.ReadRegular(filepath.Join(root, name), 32<<20)
-		if err == nil {
-			stamp += name + projectconfig.Digest(b)
-		} else if !os.IsNotExist(err) {
-			return nil, err
-		}
+	stamp, e := dependencyFingerprint(root, node.Version)
+	if e != nil {
+		return nil, e
 	}
-	stamp = projectconfig.Digest([]byte(stamp + node.Version))
 	marker := filepath.Join(stateDir, "frontend-install.digest")
 	old, _ := os.ReadFile(marker)
 	previousNode, _ := os.ReadFile(filepath.Join(stateDir, "frontend-node.version"))
-	_, modules := os.Stat(filepath.Join(root, "node_modules"))
+	moduleInfo, modules := os.Stat(filepath.Join(root, "node_modules"))
+	if modules == nil && !moduleInfo.IsDir() {
+		return nil, fmt.Errorf("node_modules must be a directory; move the conflicting file before starting the app")
+	}
 	_, vite := os.Stat(filepath.Join(root, "node_modules", "vite", "dist", "node", "index.js"))
 	if string(old) == stamp && modules == nil && (!NeedsVite(root) || vite == nil) {
 		return node, nil
@@ -90,31 +88,46 @@ func EnsureDependencies(ctx context.Context, cache, root, stateDir string) (*run
 			rebuild := exec.CommandContext(ctx, node.Node, node.NPM, "rebuild")
 			rebuild.Dir = root
 			rebuild.Env = Environment(node, os.Environ())
-			rebuild.Stdout, rebuild.Stderr = output, output
+			rebuildOutput := &activity.Output{Destination: os.Stdout}
+			rebuild.Stdout, rebuild.Stderr = rebuildOutput, rebuildOutput
 			if e = process.RunOwned(rebuild); e != nil {
-				return nil, output.Error(e)
+				return nil, rebuildOutput.Error(e)
 			}
 		}
 	}
 
 	// Installation may create/update a lockfile: fingerprint the resulting input.
-	stamp = ""
-	for _, name := range []string{"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml"} {
-		b, err := projectconfig.ReadRegular(filepath.Join(root, name), 32<<20)
-		if err == nil {
-			stamp += name + projectconfig.Digest(b)
-		}
+	stamp, e = dependencyFingerprint(root, node.Version)
+	if e != nil {
+		return nil, e
 	}
 	if e = os.MkdirAll(stateDir, 0700); e != nil {
 		return nil, e
 	}
-	if e = os.WriteFile(filepath.Join(stateDir, "frontend-node.version"), []byte(node.Version), 0600); e != nil {
+	if e = statefile.WriteBytes(filepath.Join(stateDir, "frontend-node.version"), []byte(node.Version)); e != nil {
 		return nil, e
 	}
-	if e = os.WriteFile(marker, []byte(projectconfig.Digest([]byte(stamp+node.Version))), 0600); e != nil {
+	if e = statefile.WriteBytes(marker, []byte(stamp)); e != nil {
 		return nil, e
 	}
 	return node, nil
+}
+
+// Configuration changes affect resolution just as lockfile and Node changes do.
+// Hash file contents only; registry credentials never appear in state or logs.
+func dependencyFingerprint(root, nodeVersion string) (string, error) {
+	stamp := "frontend-inputs-v2:" + nodeVersion
+	for _, name := range []string{"package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", ".npmrc", ".yarnrc", ".yarnrc.yml", "pnpm-workspace.yaml"} {
+		data, err := projectconfig.ReadRegular(filepath.Join(root, name), 32<<20)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", fmt.Errorf("cannot read frontend input %s: %w", name, err)
+		}
+		stamp += name + ":" + projectconfig.Digest(data)
+	}
+	return projectconfig.Digest([]byte(stamp)), nil
 }
 
 func dependencyInstallError(manager string, err error) error {
