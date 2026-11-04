@@ -39,6 +39,7 @@ Usage:
   laraserve clean [path]         remove vendor/ (if laraserve made it), state, hosts entries
   laraserve uninstall            remove everything laraserve ever created
   laraserve versions [path]      show selected and available runtime versions
+  laraserve check [path] [--json] inspect project setup without changing files
   laraserve doctor [--report FILE] | version
 
 serve flags:
@@ -150,6 +151,8 @@ func Run(args []string) int {
 		err = cmdUninstall(args[1:])
 	case "doctor":
 		err = cmdDoctor(args[1:]...)
+	case "check":
+		err = cmdCheck(args[1:])
 	case "version", "--version", "-v":
 		fmt.Println("laraserve", runtime.Version)
 	case "help", "--help", "-h":

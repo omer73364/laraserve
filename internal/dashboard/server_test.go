@@ -130,6 +130,24 @@ func TestProjectViewUsesRecordedNodeSelection(t *testing.T) {
 		t.Fatal("reported an unprepared version as selected")
 	}
 }
+
+func TestProjectSetupCheckIsAuthenticatedAndReadOnly(t *testing.T) {
+	s, p := fixture(t)
+	path := "/api/projects/" + p.ID + "/check"
+	if w := call(s, "GET", path, "", false, false, ""); w.Code != 401 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	response := call(s, "GET", path, "", true, false, "")
+	if response.Code != 200 || !strings.Contains(response.Body.String(), "Laravel application") {
+		t.Fatal(response.Code, response.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(p.Source, ".env")); !os.IsNotExist(err) {
+		t.Fatal("check created .env")
+	}
+	if w := call(s, "POST", path, "{}", true, true, s.origin); w.Code != 405 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+}
 func TestDashboardStopUsesOwnerControl(t *testing.T) {
 	s, p := fixture(t)
 	session, err := supervisor.Begin(context.Background(), s.home, p.ID, "")
