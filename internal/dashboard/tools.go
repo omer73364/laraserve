@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"laraserve/internal/activity"
+	"laraserve/internal/projectcheck"
 	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
 	"laraserve/internal/projecttools"
@@ -146,6 +147,18 @@ func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *projects.Project, tool string) bool {
 	switch tool {
+	case "check":
+		if r.Method != "GET" {
+			http.Error(w, "method not allowed", 405)
+			return true
+		}
+		root, err := projecttools.SettingsRoot(p)
+		if err != nil {
+			http.Error(w, err.Error(), 400)
+		} else {
+			respond(w, projectcheck.Inspect(root, filepath.Join(s.home, "runtimes")))
+		}
+		return true
 	case "progress":
 		if r.Method != "GET" {
 			http.Error(w, "method not allowed", 405)

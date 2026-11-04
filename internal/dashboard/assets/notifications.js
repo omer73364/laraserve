@@ -1,9 +1,9 @@
 'use strict';
 window.LaraNotifications=(()=>{
- const key='laraserve-notifications-v1',limit=50;
+ const key='laraserve-notifications-v1',limit=50,maxText=4000;
  const get=id=>document.getElementById(id);
  let entries=[];
- try{const saved=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(saved))entries=saved.filter(n=>n&&typeof n.text==='string'&&Number.isFinite(n.time)&&Math.abs(n.time)<=8640000000000000).slice(0,limit);}catch{}
+ try{const saved=JSON.parse(localStorage.getItem(key)||'[]');if(Array.isArray(saved))entries=saved.filter(n=>n&&typeof n.text==='string'&&Number.isFinite(n.time)&&Math.abs(n.time)<=8640000000000000).slice(0,limit).map(n=>({...n,text:n.text.slice(0,maxText)}));}catch{}
  function save(){try{localStorage.setItem(key,JSON.stringify(entries));}catch{}render();}
  function render(){
   const unread=entries.filter(n=>!n.read).length;
@@ -21,11 +21,14 @@ window.LaraNotifications=(()=>{
    item.append(label,text,time);list.append(item);
   }
  }
- function show(text,error=false){
+ function show(text,error=false,{persist=true}={}){
   if(!text)return;
-  text=String(text);const stack=get('toast-stack');
+  text=String(text).slice(0,maxText);const stack=get('toast-stack');
   if([...stack.children].some(item=>item.dataset.message===text))return;
-  entries.unshift({text,error:!!error,time:Date.now(),read:get('notifications-dialog').open});entries=entries.slice(0,limit);save();
+  const recent=entries[0];
+  if(persist&&!(recent&&recent.text===text&&recent.error===!!error&&Date.now()-recent.time<60000)){
+   entries.unshift({text,error:!!error,time:Date.now(),read:get('notifications-dialog').open});entries=entries.slice(0,limit);save();
+  }
   while(stack.children.length>=4)stack.firstElementChild.remove();
   const item=document.createElement('div');item.className='toast '+(error?'toast-error':'');item.dataset.message=text;item.setAttribute('role',error?'alert':'status');
   const content=document.createElement('span');content.textContent=text;

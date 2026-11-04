@@ -11,10 +11,20 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"laraserve/internal/projectconfig"
 	"laraserve/internal/statefile"
 )
 
 type NodeRuntime struct{ Dir, Node, NPM, Version string }
+
+// CachedNodeVersions is an offline inspection: it never creates files or fetches releases.
+func CachedNodeVersions(root string) ([]string, error) {
+	data, err := projectconfig.ReadRegular(filepath.Join(root, "node-releases.json"), 8<<20)
+	if err != nil {
+		return nil, err
+	}
+	return nodeVersions(data)
+}
 
 // NodeVersions uses the publisher's release index, retaining it for offline
 // restarts. Stable even-numbered release lines (Node 14+) are retained, including
@@ -24,20 +34,23 @@ func NodeVersions(root string) ([]string, error) {
 		return nil, err
 	}
 	file := filepath.Join(root, "node-releases.json")
-	b, readErr := os.ReadFile(file)
+	b, readErr := projectconfig.ReadRegular(file, 8<<20)
+	if readErr == nil {
+		_, readErr = nodeVersions(b)
+	}
 	info, _ := os.Stat(file)
 	if readErr != nil || info == nil || time.Since(info.ModTime()) > 24*time.Hour {
 		fresh, e := checksumMetadata("https://nodejs.org/dist/index.json")
 		if e == nil {
-			if _, e = nodeVersions(fresh); e != nil {
-				return nil, e
+			if _, e = nodeVersions(fresh); e == nil {
+				if e = statefile.WriteBytes(file, fresh); e != nil {
+					return nil, e
+				}
+				b = fresh
 			}
-			if e = statefile.WriteBytes(file, fresh); e != nil {
-				return nil, e
-			}
-			b = fresh
-		} else if readErr != nil {
-			return nil, e
+		}
+		if e != nil && readErr != nil {
+			return nil, fmt.Errorf("cannot refresh Node release catalog: %w", e)
 		}
 	}
 	return nodeVersions(b)
@@ -152,8 +165,8 @@ func nodeChecksumURL(raw string) string {
 // NodeLTSVersions identifies publisher-designated LTS releases in the cached
 // index. Exact project pins can still select other published stable releases.
 func NodeLTSVersions(root string) []string {
-	b, e := os.ReadFile(filepath.Join(root, "node-releases.json"))
-	if e != nil || len(b) > 8<<20 {
+	b, e := projectconfig.ReadRegular(filepath.Join(root, "node-releases.json"), 8<<20)
+	if e != nil {
 		return nil
 	}
 	var releases []struct {

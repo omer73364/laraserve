@@ -3,10 +3,12 @@ const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const bytes = n => n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB' : (n / 1048576).toFixed(0) + ' MB';
 let csrf='',projects=[],fetching=false,logRequest,searchTimer;
+let settingsSequence=0,environmentSequence=0,applicationSequence=0;
 let currentView='projects',detailTab='overview',settingsGroup='connection',lastRoute='#projects';
 let settingsDirty=false,environmentDirty=false,environmentLoaded=false,environmentLoading=false,settingsLoading=false,savingSettings=false,savingEnvironment=false,taskDismissed=false;
 const localBusy=new Set();
 const observedOperations=new Map();
+const checkingProjects=new Set();let checkSequence=0;
 const telemetry={signature:'',cpu:[],memory:[]};
 const attention=['failed','crashed','unresponsive','unknown'];
 const projectTabs=['overview','configuration','environment','actions','logs'];
@@ -20,7 +22,7 @@ mediaTheme.addEventListener('change',()=>{if(appearance==='system')applyTheme();
 function toast(text,error=false){LaraNotifications.show(text,error);}
 function message(text,error=false){toast(text,error);}
 function setFormEnabled(id,enabled){for(const el of $(id).elements)el.disabled=!enabled;LaraControls.sync();}
-function updateHTML(el,html){if(el.innerHTML!==html)el.innerHTML=html;}
+function updateHTML(el,html){if(el.innerHTML===html)return;const template=document.createElement('template');template.innerHTML=html;if(el.innerHTML!==template.innerHTML)el.replaceChildren(template.content);}
 function safeLink(value){try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u.href:'';}catch{return '';}}
 function badge(state){return `<span class="badge ${escape(state)}"><i class="dot ${escape(state)}"></i>${escape(state)}</span>`;}
 function projectActions(p,compact=false){
@@ -84,6 +86,7 @@ function render(){
  const shown=projects.filter(p=>`${p.name} ${p.source} ${p.url}`.toLowerCase().includes(query)&&(status==='all'||(status==='attention'?attention.includes(p.status):p.status===status)));
  syncRows(shown);
  $('nav-count').textContent=projects.length;
+ LaraQuickOpen.setProjects(projects);
  renderSidebar();
  $('project-count').textContent=`${shown.length} ${shown.length===1?'project':'projects'}`;
  renderMonitoring();
@@ -107,7 +110,7 @@ function renderDetail(){
  if(!startupBusy.has(p.id)){$('project-startup').checked=!!p.startup;$('project-startup').disabled=!!p.operation?.pending;}$('project-startup-note').textContent='For startup at sign-in, enable Launch LaraServe at login in Settings.';
  $('detail-path').textContent=p.source;$('detail-path').title=p.source;
  updateHTML($('detail-status'),`<i class="dot ${escape(p.status)}"></i>${escape(p.status)}`);$('detail-status').className='badge '+p.status;
- updateHTML($('detail-actions'),projectActions(p)+(p.admin_url?`<a class="button" href="${escape(p.admin_url)}" target="_blank" rel="noopener noreferrer">Open phpMyAdmin ↗</a>`:'<button class="button" disabled title="Start this project with private MySQL and phpMyAdmin enabled">Open phpMyAdmin ↗</button>'));$('project-switcher').value=p.id;
+ updateHTML($('detail-actions'),projectActions(p)+(p.admin_url?`<a class="button" href="${escape(p.admin_url)}" target="_blank" rel="noopener noreferrer">Open phpMyAdmin ↗</a>`:'<button class="button" disabled title="Start this project with private MySQL and phpMyAdmin enabled">Open phpMyAdmin ↗</button>')+`<button class="button" data-check-project="${p.id}"${checkingProjects.has(p.id)?' disabled':''}>${checkingProjects.has(p.id)?'Checking…':'Check setup'}</button>`);$('project-switcher').value=p.id;
  const error=p.error||p.operation?.error||'';$('project-error').textContent=error;$('project-error').hidden=!error;
  $('overview-health').textContent=p.health;
  const c=configDocument?.config;
@@ -134,7 +137,7 @@ function route(){
  const changesProject=!isProject||parts[1]!==toolProject;
  if(uninstalling||applicationSaving||savingSettings||savingEnvironment||(changesProject&&hasDraft()&&!confirm('Discard your unsaved changes?'))){history.replaceState(null,'',lastRoute);$('project-switcher').value=toolProject;return;}
  lastRoute=hash;applicationDirty=false;message('');LaraControls.close();
- if(changesProject){if(logRequest){logRequest.abort();logRequest=undefined;}settingsDirty=false;environmentDirty=false;toolProject='';configDocument=undefined;environmentDocument=undefined;environmentLoaded=false;environmentLoading=false;toolNotice('');}
+ if(changesProject){if(logRequest){logRequest.abort();logRequest=undefined;}settingsDirty=false;environmentDirty=false;toolProject='';settingsSequence++;environmentSequence++;configDocument=undefined;environmentDocument=undefined;environmentLoaded=false;environmentLoading=false;checkSequence++;$('project-check-panel').hidden=true;toolNotice('');}
  currentView=isProject?'detail':['projects','runtimes','new','add','activity','application'].includes(parts[0])?parts[0]:'projects';
  if(isProject&&!projects.some(p=>p.id===parts[1])){currentView='projects';message('This project is no longer registered.');}
  document.querySelectorAll('[data-view]').forEach(el=>el.hidden=el.dataset.view!==currentView);
@@ -162,7 +165,7 @@ function route(){
 }
 async function request(path,options={}){
  const response=await fetch(path,{cache:'no-store',credentials:'same-origin',...options});
- if(!response.ok){if(response.status===401){$('locked').hidden=false;$('workspace').hidden=true;}throw new Error((await response.text()).trim()||'Request failed');}
+ if(!response.ok){if(response.status===401){csrf='';$('locked').hidden=false;$('workspace').hidden=true;}throw new Error((await response.text()).trim()||'Request failed');}
  return response.status===202||response.status===204?null:response.json();
 }
 async function refresh(){
@@ -190,7 +193,7 @@ document.addEventListener('click',async event=>{
  const button=event.target.closest('[data-action]');if(!button)return;
  const id=button.dataset.id,action=button.dataset.action;
  if(localBusy.has(id))return;
- localBusy.add(id);render();message(action==='stop'?'Stopping project…':action==='restart'?'Restarting project…':'Starting project…');
+ localBusy.add(id);render();LaraNotifications.show(action==='stop'?'Stopping project…':action==='restart'?'Restarting project…':'Starting project…',false,{persist:false});
  try{await post(`/api/projects/${id}/${action}`,{});openProjectProgress(id,action);}catch(e){message(e.message,true);}finally{localBusy.delete(id);await refresh();}
 });
 $('refresh').addEventListener('click',()=>{message('');refresh();});
@@ -202,9 +205,9 @@ $('log-source').addEventListener('change',loadLogs);$('refresh-logs').addEventLi
 $('log-search').addEventListener('input',()=>{clearTimeout(searchTimer);searchTimer=setTimeout(loadLogs,250);});
 document.querySelectorAll('[data-settings-group]').forEach(button=>button.addEventListener('click',()=>{selectSettingsGroup(button.dataset.settingsGroup);history.replaceState(null,'',`#project/${toolProject}/configuration/${settingsGroup}`);lastRoute=location.hash;}));
 $('settings-form').addEventListener('invalid',event=>{const section=event.target.closest('[data-setting-section]');if(section)selectSettingsGroup(section.dataset.settingSection);},true);
-$('settings-form').addEventListener('input',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
-$('settings-form').addEventListener('change',()=>{settingsDirty=true;$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
-$('environment-form').addEventListener('input',()=>{environmentDirty=true;toolNotice('');});
+$('settings-form').addEventListener('input',()=>{settingsDirty=true;invalidateProjectCheck();$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
+$('settings-form').addEventListener('change',()=>{settingsDirty=true;invalidateProjectCheck();$('settings-save-state').textContent='Unsaved changes';toolNotice('');});
+$('environment-form').addEventListener('input',()=>{environmentDirty=true;invalidateProjectCheck();toolNotice('');});
 document.querySelectorAll('[data-command]').forEach(button=>button.addEventListener('click',()=>{$('action-kind').value=button.dataset.tool||'artisan';$('action-command').value=button.dataset.command;$('action-args').value=button.dataset.args||'';$('schema-confirm').checked=false;LaraControls.sync();$('action-command').focus();}));
 window.addEventListener('beforeunload',event=>{if(hasDraft()||savingSettings||savingEnvironment||applicationSaving||uninstalling){event.preventDefault();event.returnValue='';}});
 window.addEventListener('hashchange',()=>{if(/^[a-f0-9]{64}$/.test(location.hash.slice(1)))connect();else route();});
@@ -214,7 +217,7 @@ async function connect(){
   if(/^[a-f0-9]{64}$/.test(token))await request('/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
   const session=await request('/api/session');csrf=session.csrf;message('');$('locked').hidden=true;$('workspace').hidden=false;
   await refresh();route();try{await loadCatalog();}catch(e){message('Runtime catalog unavailable. '+e.message,true);}
- }catch(e){$('locked').hidden=false;$('workspace').hidden=true;}
+ }catch(e){csrf='';$('locked').hidden=false;$('workspace').hidden=true;}
 }
 setInterval(()=>{if(!document.hidden)refresh();},3000);
 let toolProject = '', configDocument, environmentDocument, catalog = {php:[],mysql:[]}, currentTask = '', taskTimer;
@@ -226,44 +229,44 @@ function toolNotice(text,error=false){toast(text,error);}
 async function openTools(id){
  const p=projects.find(p=>p.id===id);
  if(!p)return;
- const changed=toolProject!==id;toolProject=id;settingsLoading=true;configDocument=undefined;$('settings-form').reset();$('settings-save-state').textContent='Changes apply after a restart.';
+ const sequence=++settingsSequence,changed=toolProject!==id;toolProject=id;settingsLoading=true;configDocument=undefined;$('settings-form').reset();$('settings-save-state').textContent='Changes apply after a restart.';
  settingsDirty=false;if(changed){environmentDocument=undefined;environmentLoaded=false;environmentDirty=false;setFormEnabled('environment-form',false);}
  setFormEnabled('settings-form',false);
- toolNotice('Loading configuration…');
+ $('settings-save-state').textContent='Loading configuration…';
  try{
   const loaded=await request(`/api/projects/${id}/settings`);
-  if(toolProject!==id)return;
+  if(toolProject!==id||sequence!==settingsSequence)return;
   configDocument=loaded;const c=loaded.config,f=$('settings-form').elements;
   for(const key of ['domain','php','mysql','node','php_ini'])f[key].value=c[key]||'';
   for(const key of ['vite','queue','scheduler','redis','mailpit'])f['service_'+key].checked=!!c.services?.[key];f.service_auto_detect.checked=c.services?.auto_detect!==false;
   f.port.value=c.port||'';f.database.value=c.database||'auto';f.https.value=c.https==null?'':String(c.https);f.phpmyadmin.value=c.phpmyadmin==null?'':String(c.phpmyadmin);
   for(const key of phpFields)f[key].value=c.php_settings?.[key]||'';
-  setFormEnabled('settings-form',true);toolNotice('');renderDetail();
- }catch(e){if(toolProject===id)toolNotice(e.message,true);}finally{if(toolProject===id)settingsLoading=false;}
+  setFormEnabled('settings-form',true);$('settings-save-state').textContent='Changes apply after a restart.';toolNotice('');renderDetail();
+ }catch(e){if(toolProject===id&&sequence===settingsSequence){$('settings-save-state').textContent='Could not load settings. Use Reload to retry. '+e.message;toolNotice(e.message,true);}}finally{if(toolProject===id&&sequence===settingsSequence)settingsLoading=false;}
 }
 async function loadEnvironment(){
- const id=toolProject;environmentLoading=true;environmentDocument=undefined;$('environment-fields').replaceChildren();setFormEnabled('environment-form',false);toolNotice('Loading masked environment…');changedVariables.clear();$('env-new-key').value='';$('env-new-value').value='';
+ const id=toolProject,sequence=++environmentSequence;environmentLoading=true;environmentDocument=undefined;$('environment-fields').replaceChildren();setFormEnabled('environment-form',false);$('env-comparison').textContent='Loading masked environment…';changedVariables.clear();$('env-new-key').value='';$('env-new-value').value='';
  try{
-  const loaded=await request(`/api/projects/${id}/environment`);if(toolProject!==id)return;environmentDocument=loaded;
+  const loaded=await request(`/api/projects/${id}/environment`);if(toolProject!==id||sequence!==environmentSequence)return;environmentDocument=loaded;
   $('environment-fields').innerHTML=environmentDocument.variables.map(v=>`<div class="env-row"><label>${escape(v.key)} ${v.secret?'· masked':''}<input data-env-key="${escape(v.key)}" type="${v.secret?'password':'text'}" value="${escape(v.value)}" placeholder="${v.secret&&v.present?'Unchanged secret':v.present?'Empty value':'Not in .env'}" autocomplete="off"></label><small>${v.in_example?'In .env.example':'Only in .env'}${v.secret?' · example value hidden':v.in_example?'<br>Example: '+escape(v.example):''}${!v.present?' · missing from .env':''}</small></div>`).join('');
   $('env-comparison').textContent=environmentDocument.variables.filter(v=>v.in_example&&!v.present).length+' example variables missing';environmentLoaded=true;environmentDirty=false;setFormEnabled('environment-form',true);toolNotice('');
- }catch(e){if(toolProject===id)toolNotice(e.message,true);}finally{if(toolProject===id)environmentLoading=false;}
+ }catch(e){if(toolProject===id&&sequence===environmentSequence){$('env-comparison').textContent='Could not load environment. Use Reload to retry. '+e.message;toolNotice(e.message,true);}}finally{if(toolProject===id&&sequence===environmentSequence)environmentLoading=false;}
 }
 $('settings-form').addEventListener('submit',async event=>{
- event.preventDefault();if(!configDocument||savingSettings)return;const f=event.target.elements,c={...configDocument.config};
+ event.preventDefault();if(!configDocument||savingSettings)return;const restart=event.submitter?.dataset.restart==='true',id=toolProject,f=event.target.elements,c={...configDocument.config};
  for(const key of ['domain','php','mysql','node','php_ini'])c[key]=f[key].value.trim();
  c.services={...c.services,auto_detect:f.service_auto_detect.checked};for(const key of ['vite','queue','scheduler','redis','mailpit'])c.services[key]=f['service_'+key].checked;
  c.database=f.database.value;for(const key of ['https','phpmyadmin']){if(f[key].value==='')delete c[key];else c[key]=f[key].value==='true';}
  if(f.port.value==='')delete c.port;else c.port=Number(f.port.value);
  c.php_settings={...c.php_settings};for(const key of phpFields){if(f[key].value==='')delete c.php_settings[key];else c.php_settings[key]=f[key].value.trim();}
  savingSettings=true;setFormEnabled('settings-form',false);
- try{configDocument=await post(`/api/projects/${toolProject}/settings`,{revision:configDocument.revision,config:c});settingsDirty=false;$('settings-save-state').textContent='All changes saved';toolNotice('Configuration saved. Restart the project to apply your changes.');renderDetail();}catch(e){toolNotice(e.message,true);}finally{savingSettings=false;setFormEnabled('settings-form',true);}
+ try{configDocument=await post(`/api/projects/${toolProject}/settings`,{revision:configDocument.revision,config:c});settingsDirty=false;$('settings-save-state').textContent='All changes saved';if(restart)await restartSavedProject(id);else toolNotice('Configuration saved. Restart the project to apply your changes.');renderDetail();}catch(e){toolNotice(e.message,true);}finally{savingSettings=false;setFormEnabled('settings-form',true);}
 });
 $('environment-fields').addEventListener('input',event=>{if(event.target.dataset.envKey)changedVariables.set(event.target.dataset.envKey,event.target.value);});
 $('environment-form').addEventListener('submit',async event=>{event.preventDefault();if(!environmentDocument||savingEnvironment)return;
- const changes=Object.fromEntries(changedVariables),key=$('env-new-key').value.trim();if(key)changes[key]=$('env-new-value').value;
+ const restart=event.submitter?.dataset.restart==='true',id=toolProject,changes=Object.fromEntries(changedVariables),key=$('env-new-key').value.trim();if(key)changes[key]=$('env-new-value').value;
  savingEnvironment=true;setFormEnabled('environment-form',false);
- try{await post(`/api/projects/${toolProject}/environment`,{revision:environmentDocument.revision,changes});environmentDirty=false;await loadEnvironment();toolNotice('Environment saved. Restart the project to apply your changes.');}catch(e){toolNotice(e.message,true);}finally{savingEnvironment=false;if(environmentDocument)setFormEnabled('environment-form',true);}
+ try{await post(`/api/projects/${toolProject}/environment`,{revision:environmentDocument.revision,changes});environmentDirty=false;await loadEnvironment();if(restart)await restartSavedProject(id);else toolNotice('Environment saved. Restart the project to apply your changes.');}catch(e){toolNotice(e.message,true);}finally{savingEnvironment=false;if(environmentDocument)setFormEnabled('environment-form',true);}
 });
 // Tokenize arguments without a shell. Quoted groups are supported; no expansion.
 function argumentsList(text){const result=[];let word='',quote='',escaped=false,started=false;for(const c of text){if(escaped){word+=c;escaped=false;started=true;}else if(c==='\\'&&quote!=="'"){escaped=true;started=true;}else if(quote){if(c===quote)quote='';else word+=c;}else if(c==='"'||c==="'"){quote=c;started=true;}else if(/\s/.test(c)){if(started){result.push(word);word='';started=false;}}else{word+=c;started=true;}}if(escaped||quote)throw new Error('Close the quote or escape in the arguments.');if(started)result.push(word);return result;}
@@ -369,14 +372,15 @@ function showUpdate(result){
  $('update-message').textContent=result.message;$('update-checked').textContent=result.checked?'Last checked '+new Date(result.checked).toLocaleString():'';
 }
 async function loadApplication(){
- appNotice('Loading preferences…');setFormEnabled('application-form',false);
+ const sequence=++applicationSequence;
+ $('application-save-state').textContent='Loading preferences…';setFormEnabled('application-form',false);
  try{
-  applicationInfo=await request('/api/application');applicationDocument=applicationInfo.settings;const c=applicationDocument.config;
+  const loaded=await request('/api/application');if(sequence!==applicationSequence||currentView!=='application')return;applicationInfo=loaded;applicationDocument=applicationInfo.settings;const c=applicationDocument.config;
   $('app-login').checked=c.launch_at_login;$('app-open').checked=c.open_dashboard;$('app-updates').checked=c.check_updates;
   $('app-platform').textContent=applicationInfo.platform;$('app-home').textContent=applicationInfo.home;$('app-executable').textContent=applicationInfo.executable;$('app-login-path').textContent=applicationInfo.login_path||'Not available on this platform';
   $('uninstalled-executable').textContent=applicationInfo.executable;
   showUpdate(applicationInfo.updates);applicationDirty=false;$('application-save-state').textContent='Startup options apply on your next launch or login.';setFormEnabled('application-form',true);$('app-login').disabled=!applicationInfo.login_supported;appNotice('');
- }catch(e){appNotice(e.message,true);}
+ }catch(e){if(sequence===applicationSequence&&currentView==='application')appNotice(e.message,true);}
 }
 $('application-form').addEventListener('change',()=>{applicationDirty=true;$('application-save-state').textContent='Unsaved preferences';appNotice('');});
 $('application-form').addEventListener('submit',async event=>{
@@ -473,3 +477,30 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.bo
 
 sidebarMedia.addEventListener('change',closeSidebar);syncSidebarAccess();
 $('app-sidebar').addEventListener('keydown',event=>{if(event.key!=='Tab'||!sidebarMedia.matches||!document.body.classList.contains('sidebar-open'))return;const items=[...$('app-sidebar').querySelectorAll('a[href],button:not([disabled]),[tabindex="0"]')].filter(el=>el.getClientRects().length);const first=items[0],last=items[items.length-1];if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}});
+
+document.addEventListener('click',async event=>{
+ const button=event.target.closest('[data-check-project]');if(!button)return;
+ const id=button.dataset.checkProject;if(checkingProjects.has(id))return;
+ const sequence=++checkSequence;checkingProjects.add(id);renderDetail();
+ try{
+  const report=await request(`/api/projects/${id}/check`);
+  if(toolProject!==id||checkSequence!==sequence)return;
+  $('project-check-panel').hidden=false;
+  $('project-check-summary').textContent=report.errors?`${report.errors} ${report.errors===1?'issue needs':'issues need'} attention before starting.`:report.warnings?`${report.warnings} ${report.warnings===1?'warning':'warnings'} to review. No blocking issue detected.`:'No blocking issues detected. Missing dependencies will be prepared on startup.';
+  const names={ok:'Ready',automatic:'Handled on start',warning:'Review',error:'Needs attention'},targets=new Set(['configuration','configuration/runtimes','configuration/services','environment','actions']);
+  const priority={error:0,warning:1,automatic:2,ok:3};
+  updateHTML($('project-check-results'),[...report.checks].sort((a,b)=>(priority[a.status]??4)-(priority[b.status]??4)).map(check=>`<li class="check-${escape(check.status)}"><span class="check-symbol" aria-hidden="true">${check.status==='ok'?'✓':check.status==='automatic'?'↻':'!'}</span><div><strong>${escape(check.title)}</strong><small>${escape(check.detail)}</small>${targets.has(check.target)?`<a href="#project/${id}/${check.target}">Open ${check.target==='actions'?'commands':check.target==='environment'?'environment':'settings'} →</a>`:''}</div><span class="badge">${escape(names[check.status]||check.status)}</span></li>`).join(''));
+  $('project-check-title').focus({preventScroll:true});$('project-check-panel').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'nearest'});
+ }catch(e){if(toolProject===id&&checkSequence===sequence)toast(e.message,true);}
+ finally{checkingProjects.delete(id);if(toolProject===id)renderDetail();}
+});
+$('project-check-close').addEventListener('click',()=>{$('project-check-panel').hidden=true;document.querySelector('[data-check-project]')?.focus();});
+
+async function restartSavedProject(id){
+ try{await post(`/api/projects/${id}/restart`,{});openProjectProgress(id,'restart');}
+ catch(e){toast('Changes were saved, but the project could not restart: '+e.message,true);}
+}
+$('reload-project-settings').addEventListener('click',()=>{if(settingsLoading||savingSettings)return;if(settingsDirty&&!confirm('Discard unsaved settings and reload?'))return;openTools(toolProject);});
+$('reload-project-environment').addEventListener('click',()=>{if(environmentLoading||savingEnvironment)return;if(environmentDirty&&!confirm('Discard unsaved environment changes and reload?'))return;loadEnvironment();});
+
+function invalidateProjectCheck(){checkSequence++;$('project-check-panel').hidden=true;}

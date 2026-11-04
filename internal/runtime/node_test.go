@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNodePublisherChecksum(t *testing.T) {
@@ -27,6 +28,38 @@ func TestNodePublisherChecksum(t *testing.T) {
 	}
 	if _, _, err = publisherChecksum("https://nodejs.org/dist/v22.1.0/missing.tar.gz"); err == nil {
 		t.Fatal("accepted missing checksum")
+	}
+}
+
+func TestNodeCatalogRepairsCorruptionAndKeepsValidOfflineFallback(t *testing.T) {
+	old := downloadClient
+	t.Cleanup(func() { downloadClient = old })
+	root := t.TempDir()
+	file := filepath.Join(root, "node-releases.json")
+	if err := os.WriteFile(file, []byte("broken"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	body := `[{"version":"v22.23.0","lts":"Jod","files":["linux-x64","linux-arm64","osx-arm64-tar","osx-x64-tar","win-x64-zip"]}]`
+	calls := 0
+	downloadClient = &http.Client{Transport: transportFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
+	})}
+	got, err := NodeVersions(root)
+	if err != nil || len(got) != 1 || got[0] != "22.23.0" || calls != 1 {
+		t.Fatal(got, err, calls)
+	}
+	body = "invalid publisher response"
+	stale := time.Now().Add(-48 * time.Hour)
+	if err := os.Chtimes(file, stale, stale); err != nil {
+		t.Fatal(err)
+	}
+	got, err = NodeVersions(root)
+	if err != nil || len(got) != 1 || got[0] != "22.23.0" || calls != 2 {
+		t.Fatal("lost valid cached catalog", got, err, calls)
+	}
+	if _, err := CachedNodeVersions(root); err != nil || calls != 2 {
+		t.Fatal("offline inspection contacted publisher", err, calls)
 	}
 }
 func TestNodeCatalogOfflineAndExactPatches(t *testing.T) {
