@@ -13,7 +13,7 @@ import (
 )
 
 // ProjectNode checks both an explicit version selection and the package engine.
-// Prefer the newest compatible LTS supplied by the caller; keep a compatible lock.
+// Prefer established LTS lines (22, then 24) before newer LTS releases.
 func ProjectNode(root string, available []string, override, locked string, preferred ...string) (string, error) {
 	doc, err := projectconfig.Read(root)
 	if err != nil {
@@ -73,15 +73,33 @@ func ProjectNode(root string, available []string, override, locked string, prefe
 	for _, v := range preferred {
 		lts[v] = true
 	}
+	// Broad engines such as >=14 do not prove that an older frontend works
+	// with the newest major. Use a conservative baseline unless the app pins
+	// another version or its requirements exclude these established lines.
+	rank := func(v string) int {
+		if !lts[v] {
+			return 3
+		}
+		parsed, err := semver.NewVersion(v)
+		if err == nil {
+			switch parsed.Major() {
+			case 22:
+				return 0
+			case 24:
+				return 1
+			}
+		}
+		return 2
+	}
 	sort.Slice(list, func(i, j int) bool {
-		if pin == "" && lts[list[i]] != lts[list[j]] {
-			return lts[list[i]]
+		if pin == "" && rank(list[i]) != rank(list[j]) {
+			return rank(list[i]) < rank(list[j])
 		}
 		a, _ := semver.NewVersion(list[i])
 		b, _ := semver.NewVersion(list[j])
 		return a.GreaterThan(b)
 	})
-	if locked != "" {
+	if locked != "" && (pin != "" || len(preferred) == 0 || rank(locked) < 2) {
 		list = append([]string{locked}, list...)
 	}
 	for _, v := range list {

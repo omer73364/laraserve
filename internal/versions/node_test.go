@@ -75,7 +75,7 @@ func TestDefaultNodePrefersLTSButHonorsProjectPin(t *testing.T) {
 	os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"engines":{"node":">=20"}}`), 0600)
 	available := []string{"22.22.0", "24.10.0", "26.1.0"}
 	got, e := ProjectNode(root, available, "", "", "22.22.0", "24.10.0")
-	if e != nil || got != "24.10.0" {
+	if e != nil || got != "22.22.0" {
 		t.Fatal(got, e)
 	}
 	got, e = ProjectNode(root, available, "26", "", "24.10.0")
@@ -104,5 +104,24 @@ func TestLockfileLegacyDependencyEngines(t *testing.T) {
 	}
 	if _, err := ProjectNode(root, []string{"20.20.0"}, "", ""); err == nil {
 		t.Fatal("accepted malformed lockfile")
+	}
+}
+
+func TestAutomaticNodeAvoidsNewMajorLock(t *testing.T) {
+	for _, tc := range []struct{ engine, pin, locked, want string }{
+		{">=14", "", "26.1.0", "22.22.0"},
+		{">=24", "", "26.1.0", "24.10.0"},
+		{">=26", "", "", "26.1.0"},
+		{">=14", "26", "", "26.1.0"},
+		{">=14", "", "24.10.0", "24.10.0"},
+	} {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"engines":{"node":"`+tc.engine+`"}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ProjectNode(root, []string{"22.22.0", "24.10.0", "26.1.0"}, tc.pin, tc.locked, "22.22.0", "24.10.0", "26.1.0")
+		if err != nil || got != tc.want {
+			t.Fatalf("%+v: got %q, %v", tc, got, err)
+		}
 	}
 }
