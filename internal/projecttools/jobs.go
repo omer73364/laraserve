@@ -15,8 +15,10 @@ import (
 	"time"
 	"unicode"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/env"
 	"laraserve/internal/filelock"
+	"laraserve/internal/frontend"
 	"laraserve/internal/paths"
 	"laraserve/internal/prepare"
 	"laraserve/internal/process"
@@ -37,16 +39,19 @@ type TaskRequest struct {
 	Create        *scaffold.Request `json:"create,omitempty"`
 }
 type Task struct {
-	ID        string `json:"id"`
-	ProjectID string `json:"project_id,omitempty"`
-	Kind      string `json:"kind"`
-	Status    string `json:"status"`
-	Started   string `json:"started_utc"`
-	Finished  string `json:"finished_utc,omitempty"`
-	ExitCode  int    `json:"exit_code"`
-	Error     string `json:"error,omitempty"`
-	Output    string `json:"output"`
-	Offset    int64  `json:"offset"`
+	Label       string            `json:"label"`
+	ProjectName string            `json:"project_name,omitempty"`
+	Progress    activity.Progress `json:"progress"`
+	ID          string            `json:"id"`
+	ProjectID   string            `json:"project_id,omitempty"`
+	Kind        string            `json:"kind"`
+	Status      string            `json:"status"`
+	Started     string            `json:"started_utc"`
+	Finished    string            `json:"finished_utc,omitempty"`
+	ExitCode    int               `json:"exit_code"`
+	Error       string            `json:"error,omitempty"`
+	Output      string            `json:"output"`
+	Offset      int64             `json:"offset"`
 }
 
 func taskDir(home string) string      { return filepath.Join(home, "tasks") }
@@ -176,7 +181,12 @@ func StartTask(ctx context.Context, home string, r TaskRequest) (Task, error) {
 		}
 		projectID = paths.ProjectID(destination)
 	}
-	task := Task{ID: id, ProjectID: projectID, Kind: r.Kind, Status: "queued", Started: time.Now().UTC().Format(time.RFC3339Nano), ExitCode: -1}
+	task := Task{Label: taskLabel(r), ID: id, ProjectID: projectID, Kind: r.Kind, Status: "queued", Started: time.Now().UTC().Format(time.RFC3339Nano), ExitCode: -1}
+	if r.Create != nil {
+		task.ProjectName = filepath.Base(r.Create.Path)
+	} else if p, e := projects.New(home).Load(r.ProjectID); e == nil {
+		task.ProjectName = p.Name
+	}
 	request := filepath.Join(dir, id+"-request.json")
 	if err := statefile.WriteJSON(request, r); err != nil {
 		return task, err
@@ -260,10 +270,12 @@ func readTask(home, id string, output bool) (Task, error) {
 		}
 	}
 	if !output {
+		task.Progress = activity.Read(filepath.Join(taskDir(home), id+"-progress.json"))
 		return task, nil
 	}
 	f, err := os.Open(filepath.Join(taskDir(home), id+".log"))
 	if os.IsNotExist(err) {
+		task.Progress = activity.Read(filepath.Join(taskDir(home), id+"-progress.json"))
 		return task, nil
 	}
 	if err != nil {
@@ -293,6 +305,7 @@ func readTask(home, id string, output bool) (Task, error) {
 		}
 		return r
 	}, strings.ToValidUTF8(string(out), "�"))
+	task.Progress = activity.Read(filepath.Join(taskDir(home), id+"-progress.json"))
 	return task, nil
 }
 func CancelTask(ctx context.Context, home, id string) error {
@@ -331,7 +344,7 @@ func RunTaskWorker(home, id string) (result error) {
 		if result != nil {
 			task.Status = "failed"
 			task.ExitCode = 1
-			task.Error = result.Error()
+			task.Error = activity.Failure(filepath.Join(taskDir(home), id+".log"), result.Error())
 			var exit *exec.ExitError
 			if errors.As(result, &exit) {
 				task.ExitCode = exit.ExitCode()
@@ -347,6 +360,10 @@ func RunTaskWorker(home, id string) (result error) {
 		task.Offset = 0
 		_ = statefile.WriteJSON(taskFile(home, id), task)
 	}()
+	activity.SetFile(filepath.Join(taskDir(home), id+"-progress.json"))
+	activity.Plan("Prepare runtime", "Run command")
+	activity.Start("Prepare runtime")
+	defer func() { activity.Finish(result) }()
 	if err = validateTask(home, request); err != nil {
 		return err
 	}
@@ -404,6 +421,8 @@ func RunTaskWorker(home, id string) (result error) {
 	case "create":
 		return scaffold.Create(ctx, home, *request.Create)
 	case "runtime":
+		activity.Plan("Download runtime", "Verify runtime")
+		activity.Start("Download runtime")
 		release, err := filelock.Acquire(ctx, filepath.Join(home, "startup.lock"))
 		if err != nil {
 			return err
@@ -414,6 +433,9 @@ func RunTaskWorker(home, id string) (result error) {
 		} else {
 			_, err = runtime.EnsureMySQLVersion(filepath.Join(home, "runtimes"), request.Args[1])
 		}
+		if err == nil {
+			activity.Start("Verify runtime")
+		}
 		return err
 	}
 	p, err := projects.New(home).Load(request.ProjectID)
@@ -421,15 +443,33 @@ func RunTaskWorker(home, id string) (result error) {
 		return err
 	}
 	if request.Kind == "npm" {
-		executable, e := os.Executable()
+		activity.Plan("Choose project Node", "Run npm command")
+		activity.Start("Choose project Node")
+		manager, _, e := versions.PackageManager(p.Root)
 		if e != nil {
 			return e
 		}
-		args := append([]string{"npm", p.Root, "--"}, request.Args...)
-		cmd := exec.CommandContext(ctx, executable, args...)
-		cmd.Env = append(os.Environ(), "LARASERVE_HOME="+home)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		return process.RunOwned(cmd)
+		if manager != "npm" {
+			return fmt.Errorf("this project uses %s; npm will not rewrite its lockfile", manager)
+		}
+		gate, e := filelock.Acquire(ctx, filepath.Join(home, "startup.lock"))
+		if e != nil {
+			return e
+		}
+		node, e := frontend.Select(filepath.Join(home, "runtimes"), p.Root)
+		gate()
+		if e != nil {
+			return e
+		}
+		activity.Detail("Node " + node.Version + " · selected for " + p.Name)
+		activity.Start("Run npm command")
+		args := append([]string{node.NPM}, request.Args...)
+		cmd := exec.CommandContext(ctx, node.Node, args...)
+		cmd.Dir = p.Root
+		cmd.Env = frontend.Environment(node, os.Environ())
+		output := &activity.Output{Destination: os.Stdout}
+		cmd.Stdout, cmd.Stderr = output, output
+		return output.Error(process.RunOwned(cmd))
 	}
 	state, err := supervisor.Status(home, p.ID)
 	if err != nil {
@@ -482,6 +522,7 @@ func RunTaskWorker(home, id string) (result error) {
 		}
 		execution = Execution{Root: p.Root, StateDir: st.Dir, Runtime: *rt, Env: env.Build(rt, st.Dir, false, st.AppEnv(p.Root, "http://localhost"))}
 	}
+	activity.Start("Run command")
 	rt := &execution.Runtime
 	if request.Kind == "artisan" {
 		args := append([]string{"artisan"}, request.Args...)
@@ -537,4 +578,23 @@ func RequireNoTasks(home, projectID string) error {
 
 func taskPending(status string) bool {
 	return status == "queued" || status == "running" || status == "recovering"
+}
+
+func taskLabel(r TaskRequest) string {
+	label := "Artisan " + strings.Join(r.Args, " ")
+	switch r.Kind {
+	case "create":
+		label = "Create Laravel app"
+	case "runtime":
+		label = "Install " + strings.Join(r.Args, " ")
+	case "npm":
+		label = "npm " + strings.Join(r.Args, " ")
+	case "composer":
+		label = "Composer " + strings.Join(r.Args, " ")
+	}
+	runes := []rune(label)
+	if len(runes) > 300 {
+		label = string(runes[:300]) + "…"
+	}
+	return label
 }

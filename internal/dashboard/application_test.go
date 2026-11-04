@@ -49,3 +49,18 @@ func TestApplicationAndRemovalEndpoints(t *testing.T) {
 	}
 	t.Fatal("registration did not become removed")
 }
+
+func TestProjectProgressRequiresSessionAndShowsNamedStages(t *testing.T) {
+	s, p := fixture(t)
+	if w := call(s, "GET", "/api/projects/"+p.ID+"/progress", "", false, false, ""); w.Code != 401 {
+		t.Fatal(w.Code)
+	}
+	w := call(s, "GET", "/api/projects/"+p.ID+"/progress", "", true, false, "")
+	if w.Code != 200 {
+		t.Fatal(w.Code, w.Body.String())
+	}
+	var data map[string]any
+	if json.Unmarshal(w.Body.Bytes(), &data) != nil || data["name"] != p.Name {
+		t.Fatal(w.Body.String())
+	}
+}

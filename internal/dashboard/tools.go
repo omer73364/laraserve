@@ -6,11 +6,14 @@ import (
 	"strings"
 	"time"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
 	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/scaffold"
+	"laraserve/internal/supervisor"
+	"path/filepath"
 )
 
 func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
@@ -21,6 +24,18 @@ func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	switch r.URL.Path {
+	case "/api/task-history":
+		if r.Method != "GET" {
+			http.Error(w, "method not allowed", 405)
+			return true
+		}
+		tasks, err := projecttools.ListTasks(s.home, "")
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+		} else {
+			respond(w, tasks)
+		}
+		return true
 	case "/api/catalog":
 		if r.Method != "GET" {
 			http.Error(w, "method not allowed", 405)
@@ -131,6 +146,32 @@ func (s *Server) globalTools(w http.ResponseWriter, r *http.Request) bool {
 }
 func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *projects.Project, tool string) bool {
 	switch tool {
+	case "progress":
+		if r.Method != "GET" {
+			http.Error(w, "method not allowed", 405)
+			return true
+		}
+		s.mu.Lock()
+		op := s.operations[p.ID]
+		s.mu.Unlock()
+		state, _ := supervisor.Status(s.home, p.ID)
+		output, err := s.logs(p, "startup", "")
+		if err != nil {
+			output.Text = ""
+		}
+		progress := activity.Read(filepath.Join(s.home, "control", p.ID+"-progress.json"))
+		if op.Action == "stop" {
+			status := "completed"
+			if op.Pending {
+				status = "running"
+			}
+			if op.Error != "" {
+				status = "failed"
+			}
+			progress = activity.Progress{Steps: []activity.Step{{Name: "Stop app and services", Status: status}}, Error: op.Error}
+		}
+		respond(w, map[string]any{"operation": op, "progress": progress, "output": output.Text, "status": state.Status, "name": p.Name})
+		return true
 	case "startup":
 		if r.Method != "POST" {
 			http.Error(w, "method not allowed", 405)
@@ -215,6 +256,15 @@ func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *project
 			return true
 		}
 	case "tasks":
+		if r.Method == "GET" {
+			tasks, err := projecttools.ListTasks(s.home, p.ID)
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+			} else {
+				respond(w, tasks)
+			}
+			return true
+		}
 		if r.Method == "POST" {
 			var input projecttools.TaskRequest
 			if err := decode(w, r, &input); err != nil || input.Kind != "artisan" && input.Kind != "composer" && input.Kind != "npm" {

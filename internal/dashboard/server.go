@@ -12,11 +12,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/appsettings"
 	"laraserve/internal/devservice"
 	"laraserve/internal/metrics"
@@ -194,6 +196,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 				v.Health = "Stopping"
 			case "failed", "crashed":
 				v.Health = "Needs attention"
+				v.Error = activity.Read(filepath.Join(s.home, "control", p.ID+"-progress.json")).Error
 			case "unresponsive":
 				v.Health = "Owner unreachable"
 			}
@@ -265,7 +268,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(202)
 }
 func (s *Server) perform(p *projects.Project, action string) {
-	ctx, cancel := context.WithTimeout(s.ctx, 2*time.Minute)
+	ctx, cancel := context.WithTimeout(s.ctx, 20*time.Minute)
 	defer cancel()
 	var err error
 	if action == "remove" {
@@ -273,6 +276,7 @@ func (s *Server) perform(p *projects.Project, action string) {
 	} else if action == "stop" {
 		err = supervisor.Stop(ctx, s.home, p.ID)
 	} else {
+		_ = os.Remove(filepath.Join(s.home, "control", p.ID+"-progress.json"))
 		args := append(reusableArgs(p), "--setup-local")
 		_, err = supervisor.Launch(ctx, supervisor.LaunchRequest{Home: s.home, Project: *p, Args: args, Restart: action == "restart"})
 	}

@@ -30,6 +30,7 @@ function projectActions(p,compact=false){
  const restartDisabled=pending||!active||['starting','stopping'].includes(p.status)?' disabled':'';
  return `<button class="button ${active?'':'primary'}" data-action="${active?'stop':'start'}" data-id="${p.id}"${disabled}>${pending?'Working…':active?'Stop':'Start'}</button>`+
  `<button class="button ${compact?'restart-control':''}" data-action="restart" data-id="${p.id}" aria-label="Restart ${escape(p.name)}" title="Restart ${escape(p.name)}"${restartDisabled}>${compact?'↻':'↻ Restart'}</button>`+
+ (p.operation?.pending?`<button class="button quiet" data-progress-id="${p.id}" data-progress-action="${escape(p.operation.action)}">Progress</button>`:'')+
  (url?`<a class="button open-app ${compact?'':'primary'}" href="${escape(url)}" target="_blank" rel="noopener noreferrer">Open app <span aria-hidden="true">↗</span></a>`:`<button class="button open-app" disabled title="Start this app to open it">Open app <span aria-hidden="true">↗</span></button>`);
 }
 function projectRow(p){
@@ -96,7 +97,7 @@ function render(){
   }
   $('log-project').dataset.signature=signature;
  }
- if(currentView==='detail')renderDetail();if($('uninstall-dialog').open)validateUninstall();
+ if(currentView==='detail')renderDetail();if(currentView==='detail'&&detailTab==='actions')loadTaskHistory(toolProject);if(currentView==='activity')loadTaskHistory();if($('uninstall-dialog').open)validateUninstall();
  LaraControls.sync();
 }
 function renderDetail(){
@@ -143,13 +144,15 @@ function route(){
   if(toolProject!==parts[1]||(!configDocument&&!settingsLoading))openTools(parts[1]);
   selectSettingsGroup(parts[3]||settingsGroup);renderDetail();
   if(detailTab==='environment'&&!environmentLoaded&&!environmentLoading)loadEnvironment();
-  if(detailTab==='logs'){$('log-project').value=parts[1];loadLogs();}
+  if(detailTab==='actions')loadTaskHistory(toolProject);
+ if(detailTab==='logs'){$('logs').querySelector('h2').textContent='Logs · '+projects.find(p=>p.id===parts[1]).name;$('log-project').value=parts[1];loadLogs();}
   document.title=`${projects.find(p=>p.id===parts[1]).name} · LaraServe`;
  }else{
   document.title=`${{projects:'Projects',runtimes:'Runtimes',new:'Create app',add:'Add app',activity:'Activity',application:'Settings'}[currentView]} · LaraServe`;
   if(currentView==='runtimes')loadRuntimes();if(currentView==='application')loadApplication();
  }
- if(currentView==='activity'){$('activity-empty').hidden=!!currentTask;if(currentTask){taskDismissed=false;$('task-panel').hidden=false;}}
+ if(currentView==='activity'){loadTaskHistory();$('activity-empty').hidden=!!currentTask;if(currentTask){taskDismissed=false;$('task-panel').hidden=false;}}
+ $('task-panel').hidden=currentView!=='activity'||taskDismissed;
  // Move focus to the new page title for keyboard users without disturbing live refreshes.
  const heading=document.querySelector(`[data-view="${currentView}"] h1`);if(heading){heading.tabIndex=-1;heading.focus({preventScroll:true});}
  LaraControls.sync();window.scrollTo({top:0,behavior:'instant'});
@@ -178,12 +181,14 @@ async function loadLogs(){
 }
 document.querySelector('.skip-link').addEventListener('click',event=>{event.preventDefault();$('main-content').focus();$('main-content').scrollIntoView();});
 document.addEventListener('click',async event=>{
+ const progressButton=event.target.closest('[data-progress-id]');if(progressButton){openProjectProgress(progressButton.dataset.progressId,progressButton.dataset.progressAction);return;}
+ const taskButton=event.target.closest('[data-task-id]');if(taskButton){const task=await request('/api/tasks/'+taskButton.dataset.taskId);openProgress(task);watchTask(task.id);return;}
  const remove=event.target.closest('[data-remove]');if(remove){openRemove(remove.dataset.remove);return;}
  const button=event.target.closest('[data-action]');if(!button)return;
  const id=button.dataset.id,action=button.dataset.action;
  if(localBusy.has(id))return;
  localBusy.add(id);render();message(action==='stop'?'Stopping project…':action==='restart'?'Restarting project…':'Starting project…');
- try{await post(`/api/projects/${id}/${action}`,{});}catch(e){message(e.message,true);}finally{localBusy.delete(id);await refresh();}
+ try{await post(`/api/projects/${id}/${action}`,{});openProjectProgress(id,action);}catch(e){message(e.message,true);}finally{localBusy.delete(id);await refresh();}
 });
 $('refresh').addEventListener('click',()=>{message('');refresh();});
 $('project-search').addEventListener('input',render);$('project-status').addEventListener('change',render);
@@ -227,8 +232,8 @@ async function openTools(id){
   if(toolProject!==id)return;
   configDocument=loaded;const c=loaded.config,f=$('settings-form').elements;
   for(const key of ['domain','php','mysql','node','php_ini'])f[key].value=c[key]||'';
-  for(const key of ['vite','queue','scheduler','redis','mailpit'])f['service_'+key].checked=!!c.services?.[key];
-  f.port.value=c.port??'';f.database.value=c.database||'auto';f.https.value=c.https==null?'':String(c.https);f.phpmyadmin.value=c.phpmyadmin==null?'':String(c.phpmyadmin);
+  for(const key of ['vite','queue','scheduler','redis','mailpit'])f['service_'+key].checked=!!c.services?.[key];f.service_auto_detect.checked=c.services?.auto_detect!==false;
+  f.port.value=c.port||'';f.database.value=c.database||'auto';f.https.value=c.https==null?'':String(c.https);f.phpmyadmin.value=c.phpmyadmin==null?'':String(c.phpmyadmin);
   for(const key of phpFields)f[key].value=c.php_settings?.[key]||'';
   setFormEnabled('settings-form',true);toolNotice('');renderDetail();
  }catch(e){if(toolProject===id)toolNotice(e.message,true);}finally{if(toolProject===id)settingsLoading=false;}
@@ -244,7 +249,7 @@ async function loadEnvironment(){
 $('settings-form').addEventListener('submit',async event=>{
  event.preventDefault();if(!configDocument||savingSettings)return;const f=event.target.elements,c={...configDocument.config};
  for(const key of ['domain','php','mysql','node','php_ini'])c[key]=f[key].value.trim();
- c.services={...c.services};for(const key of ['vite','queue','scheduler','redis','mailpit'])c.services[key]=f['service_'+key].checked;
+ c.services={...c.services,auto_detect:f.service_auto_detect.checked};for(const key of ['vite','queue','scheduler','redis','mailpit'])c.services[key]=f['service_'+key].checked;
  c.database=f.database.value;for(const key of ['https','phpmyadmin']){if(f[key].value==='')delete c[key];else c[key]=f[key].value==='true';}
  if(f.port.value==='')delete c.port;else c.port=Number(f.port.value);
  c.php_settings={...c.php_settings};for(const key of phpFields){if(f[key].value==='')delete c.php_settings[key];else c.php_settings[key]=f[key].value.trim();}
@@ -262,13 +267,13 @@ function argumentsList(text){const result=[];let word='',quote='',escaped=false,
 $('action-kind').addEventListener('change',()=>{$('action-command').value=$('action-kind').value==='artisan'?'about':'install';$('schema-confirm').checked=false;});
 $('action-form').addEventListener('submit',async event=>{event.preventDefault();if(event.target.dataset.pending)return;event.target.dataset.pending='true';setFormEnabled('action-form',false);try{const args=[$('action-command').value.trim(),...argumentsList($('action-args').value)];const task=await post(`/api/projects/${toolProject}/tasks`,{kind:$('action-kind').value,args,confirm_schema:$('schema-confirm').checked});$('schema-confirm').checked=false;openProgress(task);watchTask(task.id);}catch(e){toolNotice(e.message,true);}finally{delete event.target.dataset.pending;setFormEnabled('action-form',true);}});
 async function watchTask(id,reveal=true){
- currentTask=id;try{sessionStorage.setItem('laraserve-task',id);}catch{}clearTimeout(taskTimer);if(reveal)taskDismissed=false;$('task-panel').hidden=taskDismissed;$('activity-empty').hidden=true;
+ currentTask=id;try{sessionStorage.setItem('laraserve-task',id);}catch{}clearTimeout(taskTimer);if(reveal)taskDismissed=false;$('task-panel').hidden=taskDismissed||currentView!=='activity';$('activity-empty').hidden=true;
  try{const task=await request(`/api/tasks/${id}`);if(currentTask!==id)return;
-  $('task-title').textContent=task.kind+' · '+task.id;$('task-status').textContent=task.status+(task.exit_code>=0?' · exit '+task.exit_code:'')+(task.error?' · '+task.error:'');
+  $('task-title').textContent=(task.project_name?task.project_name+' · ':'')+(task.label||task.kind);$('task-status').textContent=task.status+(task.exit_code>=0?' · exit '+task.exit_code:'')+(task.error?' · '+task.error:'');
   const output=$('task-output'),atBottom=output.scrollHeight-output.scrollTop-output.clientHeight<35;output.textContent=task.output||'Waiting for output…';if(atBottom)output.scrollTop=output.scrollHeight;
   const running=['queued','running','recovering'].includes(task.status);$('activity-dot').hidden=!running;$('cancel-task').disabled=!running||task.status==='recovering';
   updateProgress(task,running);
-  if(running)taskTimer=setTimeout(()=>watchTask(id,false),700);else{await refresh();}
+  if(running)taskTimer=setTimeout(()=>watchTask(id,false),700);else{await refresh();if(currentView==='activity')loadTaskHistory();if(currentView==='detail'&&detailTab==='actions')loadTaskHistory(toolProject);}
  }catch(e){$('task-status').textContent=e.message;}
 }
 $('cancel-task').addEventListener('click',async()=>{if(!currentTask)return;try{await post(`/api/tasks/${currentTask}/cancel`,{});watchTask(currentTask);}catch(e){message(e.message,true);}});
@@ -433,9 +438,22 @@ $('uninstall-form').addEventListener('submit',async event=>{
 LaraControls.enhance();
 connect();
 
-let progressTask='',progressProject='',progressComplete=false;
-function openProgress(task){progressTask=task.id;progressProject='';progressComplete=false;$('progress-title').textContent=task.kind==='create'?'Creating your app':'Running '+task.kind;$('progress-status').textContent='Preparing…';$('progress-output').textContent='Waiting for output…';$('progress-indicator').hidden=false;$('progress-project').hidden=true;if(!$('progress-dialog').open)$('progress-dialog').showModal();}
-function updateProgress(task,running){if(progressTask!==task.id)return;const output=$('progress-output');const bottom=output.scrollHeight-output.scrollTop-output.clientHeight<50;output.textContent=task.output||'Waiting for output…';if(bottom)output.scrollTop=output.scrollHeight;$('progress-status').textContent=task.status+(task.error?' · '+task.error:'');$('progress-indicator').hidden=!running;if(!running&&!progressComplete){progressComplete=true;toast(task.exit_code===0?'Task completed':(task.error||'Task failed. Review the activity log.'),task.exit_code!==0);if(task.kind==='create'&&task.exit_code===0&&task.project_id){progressProject=task.project_id;$('progress-project').hidden=false;refresh().then(()=>{if(progressTask===task.id){$('progress-dialog').close();location.hash='#project/'+progressProject+'/configuration/connection';}});}}}
+
+let progressTask='',progressProject='',progressComplete=false,projectProgressTimer;
+function resetProgress(title){clearTimeout(projectProgressTimer);$('progress-title').textContent=title;$('progress-status').textContent='Preparing…';$('progress-output').textContent='Waiting for output…';$('progress-indicator').hidden=false;$('progress-project').hidden=true;$('progress-cancel').hidden=true;$('progress-steps').innerHTML='';$('progress-summary').textContent='';$('progress-error').hidden=true;$('progress-log').open=false;if(!$('progress-dialog').open)$('progress-dialog').showModal();}
+function renderProgress(progress,running,error=''){
+ const steps=(progress?.steps||[]).map(s=>!running&&(error||progress?.error)?(s.status==='running'?{...s,status:'failed',detail:error}:s.status==='pending'?{...s,status:'blocked',detail:'Not run'}:s):s),completed=steps.filter(s=>['completed','skipped'].includes(s.status)).length;
+ $('progress-summary').textContent=steps.length?completed+' of '+steps.length+' steps complete':running?'Preparing task…':'Task finished';
+ updateHTML($('progress-steps'),steps.map(s=>`<li class="step-${escape(s.status)}"><span class="step-symbol" aria-hidden="true">${s.status==='completed'?'✓':s.status==='skipped'?'–':s.status==='failed'?'!':s.status==='running'?'◌':'○'}</span><div><strong>${escape(s.name)}</strong><small>${escape((s.status==='failed'?'Could not complete this step':s.detail)||({completed:'Completed',running:'In progress…',pending:'Waiting',skipped:'Not needed',failed:'Failed'}[s.status]||''))}</small></div></li>`).join(''));
+ $('progress-indicator').hidden=!running;$('progress-error').textContent=error||progress?.error||'';$('progress-error').hidden=!$('progress-error').textContent;
+}
+function openProgress(task){progressTask=task.id;progressProject='';progressComplete=false;resetProgress((task.project_name?task.project_name+' · ':'')+(task.label||(task.kind==='create'?'Create Laravel app':'Run '+task.kind)));renderProgress(task.progress,true);}
+function updateProgress(task,running){if(progressTask!==task.id)return;const output=$('progress-output');const bottom=output.scrollHeight-output.scrollTop-output.clientHeight<50;output.textContent=task.output||'Waiting for output…';if(bottom)output.scrollTop=output.scrollHeight;const active=task.progress?.steps?.find(s=>s.status==='running');$('progress-status').textContent=running?(active?.name||'Preparing…'):task.exit_code===0?'Completed successfully':task.status==='cancelled'?'Task cancelled':'Task failed';renderProgress(task.progress,running,task.error||'');$('progress-cancel').hidden=!running;$('progress-cancel').disabled=task.status==='recovering';if(!running&&!progressComplete){progressComplete=true;toast(task.exit_code===0?(task.label||'Task')+' completed':(task.error||'Task failed.'),task.exit_code!==0);if(task.kind==='create'&&task.exit_code===0&&task.project_id){progressProject=task.project_id;$('progress-project').hidden=false;refresh().then(()=>{if(progressTask===task.id){$('progress-dialog').close();location.hash='#project/'+progressProject+'/configuration/connection';}});}}}
+async function openProjectProgress(id,action){progressTask='';progressProject=id;const project=projects.find(p=>p.id===id);resetProgress((project?.name||'Project')+' · '+({start:'Start project',restart:'Restart project',stop:'Stop project'}[action]||action));const poll=async()=>{if(progressProject!==id||!$('progress-dialog').open)return;try{const data=await request('/api/projects/'+id+'/progress');if(progressProject!==id)return;const running=!!data.operation.pending,error=data.operation.error||data.progress.error||'';const active=data.progress.steps?.find(s=>s.status==='running');$('progress-status').textContent=running?(active?.name||'Preparing…'):error?'Could not '+action+' project':action==='stop'?'Project stopped':'Project is running';$('progress-output').textContent=data.output||'Waiting for output…';renderProgress(data.progress,running,error);if(running)projectProgressTimer=setTimeout(poll,650);else await refresh();}catch(e){$('progress-error').textContent=e.message;$('progress-error').hidden=false;$('progress-indicator').hidden=true;}};poll();}
 $('progress-close').addEventListener('click',()=>$('progress-dialog').close());
+$('progress-dialog').addEventListener('close',()=>clearTimeout(projectProgressTimer));
 $('progress-project').addEventListener('click',()=>{$('progress-dialog').close();location.hash='#project/'+progressProject+'/configuration/connection';});
 $('create-starter').addEventListener('change',()=>{$('create-vite').checked=$('create-starter').value!=='none';});
+async function loadTaskHistory(id=''){const target=$(id?'project-task-history':'activity-history');try{const tasks=await request(id?'/api/projects/'+id+'/tasks':'/api/task-history');if(id&&id!==toolProject)return;updateHTML(target,tasks.length?tasks.map(t=>`<button class="task-history-row" data-task-id="${escape(t.id)}"><span><strong>${escape(t.label||t.kind)}</strong><small>${escape(t.project_name|| (t.project_id?projects.find(p=>p.id===t.project_id)?.name||'Project':'Workspace'))} · ${escape(new Date(t.started_utc).toLocaleString())}</small></span><span class="badge ${escape(t.status)}">${escape(t.status)}</span><span aria-hidden="true">↗</span></button>`).join(''):'<p class="muted">No tasks yet. Each command gets its own named log.</p>');}catch(e){target.textContent=e.message;}}
+
+$('progress-cancel').addEventListener('click',async()=>{if(!progressTask)return;$('progress-cancel').disabled=true;try{await post('/api/tasks/'+progressTask+'/cancel',{});watchTask(progressTask);}catch(e){toast(e.message,true);$('progress-cancel').disabled=false;}});

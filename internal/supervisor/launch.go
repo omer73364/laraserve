@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"laraserve/internal/activity"
+	"laraserve/internal/filelock"
 	"laraserve/internal/paths"
 	"laraserve/internal/projects"
 )
@@ -36,6 +38,14 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 		return LaunchResult{}, err
 	}
 	id := paths.ProjectID(canonical)
+	if err = os.MkdirAll(directory(home), 0700); err != nil {
+		return LaunchResult{}, err
+	}
+	release, err := filelock.Acquire(ctx, filepath.Join(directory(home), id+"-launch.lock"))
+	if err != nil {
+		return LaunchResult{}, err
+	}
+	defer release()
 	state, err := Status(home, id)
 	if err != nil {
 		return LaunchResult{}, err
@@ -66,7 +76,7 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 		return LaunchResult{}, err
 	}
 	logPath := filepath.Join(directory(home), id+"-startup.log")
-	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	log, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
 		return LaunchResult{}, err
 	}
@@ -79,7 +89,7 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 	cmd := exec.Command(executable, append([]string{"__background-serve"}, args...)...)
 	cmd.Stdout, cmd.Stderr = log, log
 	cmd.Env = workerEnv(home, generation)
-	cmd.Env = append(cmd.Env, "LARASERVE_SETTINGS_REPLAY=1", "LARASERVE_EXPLICIT_FLAGS="+strings.Join(request.Explicit, ","))
+	cmd.Env = append(cmd.Env, "NO_COLOR=1", "LARASERVE_SETTINGS_REPLAY=1", "LARASERVE_EXPLICIT_FLAGS="+strings.Join(request.Explicit, ","))
 	detach(cmd)
 	if err = cmd.Start(); err != nil {
 		return LaunchResult{}, err
@@ -94,7 +104,7 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 			if err == nil {
 				return LaunchResult{}, errors.New("background startup stopped before becoming ready")
 			}
-			return LaunchResult{}, fmt.Errorf("background startup failed: %w; see private startup log %s", err, logPath)
+			return LaunchResult{}, errors.New(activity.Failure(logPath, "Project could not start: "+err.Error()))
 		case <-ctx.Done():
 			return LaunchResult{State: State{ID: id, Generation: generation, Status: "starting"}, LogPath: logPath}, ctx.Err()
 		case <-ticker.C:
@@ -109,7 +119,7 @@ func Launch(ctx context.Context, request LaunchRequest) (LaunchResult, error) {
 				return LaunchResult{State: state, LogPath: logPath}, nil
 			}
 			if state.Status == "failed" || state.Status == "crashed" || state.Status == "stopped" {
-				return LaunchResult{}, fmt.Errorf("startup %s; see %s", state.Status, logPath)
+				return LaunchResult{}, errors.New(activity.Failure(logPath, "Project preparation "+state.Status))
 			}
 		}
 	}
