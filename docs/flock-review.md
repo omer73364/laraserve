@@ -54,3 +54,7 @@ The following changes were independently implemented in LaraServe after comparin
 | Process supervision | Automatic exponential retries with restart counts | Project lifecycle fails visibly when a managed child exits | Retained existing lifecycle policy; automatic retries would change ownership/failure behavior and need separate design and tests |
 
 Node selection shown on the overview is explicitly the **last selected** version. A saved settings change does not imply a running process has switched versions. Existing projects acquire the richer explanation at their next frontend preparation or managed Node/npm command. Runtime inventory reads local metadata only; it does not launch binaries or contact registries.
+
+### Daily workflow follow-up
+
+The project overview now groups PHP, Node, database and Laravel into readable stack cards, with the Node selection explanation kept visible. Services are grouped into Frontend, Background tasks, and Data & mail. Ready services with HTTP(S) URLs get direct Open links; others link to configuration. Automatically detected services are distinguished from explicitly disabled services. A tool strip links to commands, environment, logs and runtime settings, and the application URL can be copied with a toast confirmation. These controls use existing LaraServe capabilities and do not imply independent service start/stop support.
