@@ -2,6 +2,7 @@ package ui
 
 import (
 	"fmt"
+	"laraserve/internal/activity"
 	"os"
 	"strings"
 	"time"
@@ -37,6 +38,11 @@ func (p *Progress) Write(data []byte) (int, error) {
 }
 
 func (p *Progress) draw(now time.Time) {
+	if p.total > 0 {
+		activity.Detail(fmt.Sprintf("%s · %.0f%% (%s / %s)", p.label, float64(p.n)*100/float64(p.total), Bytes(p.n), Bytes(p.total)))
+	} else {
+		activity.Detail(fmt.Sprintf("%s · %s downloaded", p.label, Bytes(p.n)))
+	}
 	elapsed := now.Sub(p.started).Seconds()
 	speed := float64(p.n)
 	if elapsed > 0 {

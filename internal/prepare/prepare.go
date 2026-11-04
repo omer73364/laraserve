@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"laraserve/internal/activity"
 	"laraserve/internal/process"
 	"os"
 	"os/exec"
@@ -139,8 +140,9 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 	if runtime.GOOS == "windows" {
 		cmd.Env = append([]string{}, env...)
 		cmd.Env = append(cmd.Env, "PHP_BINARY="+php)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		return process.RunOwned(cmd)
+		output := &activity.Output{Destination: os.Stdout}
+		cmd.Stdout, cmd.Stderr = output, output
+		return output.Error(process.RunOwned(cmd))
 	}
 	php, err := filepath.Abs(php)
 	if err != nil {
@@ -177,8 +179,9 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 		cmd.Env = append(cmd.Env, entry)
 	}
 	cmd.Env = append(cmd.Env, "PHP_BINARY="+launcher, "PATH="+dir+string(os.PathListSeparator)+path)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return process.RunOwned(cmd)
+	output := &activity.Output{Destination: os.Stdout}
+	cmd.Stdout, cmd.Stderr = output, output
+	return output.Error(process.RunOwned(cmd))
 }
 
 // ComposerCreateProject scaffolds an app using the cached PHP and Composer.
