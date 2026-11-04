@@ -108,7 +108,7 @@ func Caddyfile(c Config) string {
 	}
 	b.WriteString("\n}\n")
 	if c.Admin != nil {
-		fmt.Fprintf(&b, "\n%s://localhost:%d {\n\tbind 127.0.0.1\n", scheme, c.Admin.Port)
+		fmt.Fprintf(&b, "\n%s://localhost:%d, %s://127.0.0.1:%d {\n\tbind 127.0.0.1\n", scheme, c.Admin.Port, scheme, c.Admin.Port)
 		if c.HTTPS {
 			fmt.Fprintf(&b, "\ttls %s %s\n", q(c.Cert), q(c.Key))
 		}
