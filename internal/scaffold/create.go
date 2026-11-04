@@ -5,7 +5,10 @@ package scaffold
 import (
 	"context"
 	"fmt"
+	"laraserve/internal/frontend"
+	"laraserve/internal/process"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -27,6 +30,10 @@ import (
 )
 
 type Request struct {
+	Domain         string `json:"domain,omitempty"`
+	Port           *int   `json:"port,omitempty"`
+	HTTPS          *bool  `json:"https,omitempty"`
+	Vite           bool   `json:"vite,omitempty"`
 	Path           string `json:"path"`
 	Version        string `json:"version,omitempty"`
 	PHP            string `json:"php,omitempty"`
@@ -39,6 +46,9 @@ type Request struct {
 }
 
 func (r Request) Validate() error {
+	if err := (projectconfig.Config{Domain: r.Domain, Port: r.Port, HTTPS: r.HTTPS}).Validate(); err != nil {
+		return err
+	}
 	if !filepath.IsAbs(r.Path) || len(r.Path) > 4096 || strings.ContainsRune(r.Path, 0) {
 		return fmt.Errorf("choose an absolute destination path")
 	}
@@ -161,6 +171,45 @@ func Create(ctx context.Context, home string, r Request) error {
 			if _, e = projectconfig.UpdateEnvironment(home, root, paths.ProjectID(root), doc.Revision, changes); e != nil {
 				return e
 			}
+		}
+	}
+	doc, err := projectconfig.Read(root)
+	if err != nil {
+		return err
+	}
+	config := doc.Config
+	config.Domain, config.Port, config.HTTPS = r.Domain, r.Port, r.HTTPS
+	config.Database = map[string]string{"": "sqlite", "sqlite": "sqlite", "mysql": "managed", "external": "external"}[r.Database]
+	if _, err = projectconfig.Save(home, root, paths.ProjectID(root), doc.Revision, config); err != nil {
+		return err
+	}
+	if r.Vite {
+		ui.Info("Installing frontend dependencies before enabling Vite")
+		manager, _, e := versions.PackageManager(root)
+		if e != nil {
+			return e
+		}
+		if manager != "npm" {
+			return fmt.Errorf("project uses %s; install its frontend dependencies before enabling Vite", manager)
+		}
+		node, e := frontend.Select(filepath.Join(home, "runtimes"), root)
+		if e != nil {
+			return e
+		}
+		cmd := exec.CommandContext(ctx, node.Node, node.NPM, "install")
+		cmd.Dir = root
+		cmd.Env = frontend.Environment(node, os.Environ())
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if e = process.RunOwned(cmd); e != nil {
+			return fmt.Errorf("frontend installation failed; app files retained: %w", e)
+		}
+		config.Services.Vite = true
+		doc, err = projectconfig.Read(root)
+		if err != nil {
+			return err
+		}
+		if _, err = projectconfig.Save(home, root, paths.ProjectID(root), doc.Revision, config); err != nil {
+			return err
 		}
 	}
 	footprint, err := manifest.Load(filepath.Join(home, "manifest.json"))

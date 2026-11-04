@@ -218,7 +218,7 @@ func (s *Server) projectTools(w http.ResponseWriter, r *http.Request, p *project
 		if r.Method == "POST" {
 			var input projecttools.TaskRequest
 			if err := decode(w, r, &input); err != nil || input.Kind != "artisan" && input.Kind != "composer" && input.Kind != "npm" {
-				http.Error(w, "choose Artisan or Composer", 400)
+				http.Error(w, "choose Artisan, Composer or npm", 400)
 				return true
 			}
 			input.ProjectID = p.ID

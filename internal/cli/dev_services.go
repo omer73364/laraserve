@@ -187,7 +187,7 @@ func prepareDevelopment(cache string, c projectconfig.Config, cfg *serve.Config,
 		}
 		entry := filepath.Join(cfg.Root, "node_modules", "vite", "dist", "node", "index.js")
 		if info, err := os.Stat(entry); err != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("Vite is enabled but not installed; install frontend dependencies with the project's package manager first")
+			return nil, fmt.Errorf("Vite dependencies are missing. Open Commands, choose npm install, then restart (for yarn/pnpm projects, use the matching package manager)")
 		}
 		node, err := projectNode(cache, cfg.Root)
 		if err != nil {

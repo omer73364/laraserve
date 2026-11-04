@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 	"fmt"
+	"laraserve/internal/frontend"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"laraserve/internal/filelock"
@@ -78,41 +78,8 @@ func cmdNode(args []string, npm bool) error {
 	return process.RunOwned(cmd)
 }
 func projectNode(cache, root string) (*runtime.NodeRuntime, error) {
-	if err := os.MkdirAll(cache, 0700); err != nil {
-		return nil, err
-	}
-	available, err := runtime.NodeVersions(cache)
-	if err != nil {
-		return nil, err
-	}
-	lockFile := filepath.Join(cache, "node-project-"+paths.ProjectID(root)+".json")
-	lock, err := versions.ReadLock(lockFile)
-	if err != nil {
-		return nil, err
-	}
-	selected, err := versions.ProjectNode(root, available, "", lock.Node)
-	if err != nil {
-		return nil, err
-	}
-	node, err := runtime.EnsureNode(cache, selected)
-	if err != nil {
-		return nil, err
-	}
-	if err = versions.WriteLock(lockFile, versions.Pins{Node: selected}); err != nil {
-		return nil, err
-	}
-	return node, nil
+	return frontend.Select(cache, root)
 }
 func nodeEnvironment(node *runtime.NodeRuntime, base []string) []string {
-	result := make([]string, 0, len(base)+1)
-	path := filepath.Dir(node.Node)
-	for _, entry := range base {
-		key, value, ok := strings.Cut(entry, "=")
-		if ok && strings.EqualFold(key, "PATH") {
-			path += string(os.PathListSeparator) + value
-			continue
-		}
-		result = append(result, entry)
-	}
-	return append(result, "PATH="+path)
+	return frontend.Environment(node, base)
 }

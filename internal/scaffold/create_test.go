@@ -43,3 +43,18 @@ func TestRetainedPrivateDataBlocksNewAppMigrations(t *testing.T) {
 		t.Fatal("retained data changed")
 	}
 }
+
+func TestCreationValidatesConnectionOptions(t *testing.T) {
+	port := 70000
+	if err := (Request{Path: filepath.Join(t.TempDir(), "app"), Port: &port}).Validate(); err == nil {
+		t.Fatal("invalid port accepted")
+	}
+	if err := (Request{Path: filepath.Join(t.TempDir(), "app"), Domain: "https://example.test"}).Validate(); err == nil {
+		t.Fatal("invalid domain accepted")
+	}
+	port = 8443
+	https := true
+	if err := (Request{Path: filepath.Join(t.TempDir(), "app"), Domain: "example.test", Port: &port, HTTPS: &https, Vite: true}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

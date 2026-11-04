@@ -4,6 +4,7 @@ import "flag"
 
 type serveOptions struct {
 	fs            *flag.FlagSet
+	setupLocal    *bool
 	domainF       *string
 	portF         *int
 	host          *string
@@ -27,6 +28,7 @@ type serveOptions struct {
 func newServeOptions() *serveOptions {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	options := &serveOptions{fs: fs}
+	options.setupLocal = fs.Bool("setup-local", false, "configure local DNS and trust without terminal prompts")
 	options.domainF = fs.String("domain", "", "")
 	options.portF = fs.Int("port", 0, "")
 	options.host = fs.String("host", "127.0.0.1", "")

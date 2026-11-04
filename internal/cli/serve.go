@@ -148,6 +148,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 	if err != nil {
 		return err
 	}
+	c.autoSetup = *options.setupLocal
 	registry := projects.New(h.Root)
 	previous, err := registry.Load(registryID)
 	if err != nil && !os.IsNotExist(err) {
@@ -308,7 +309,17 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			domain, strings.Join(certs.DefaultPermitted, ", "), domain)
 	}
 	if !hosts.IsLoopbackName(domain) && !hosts.Resolves(domain) {
-		domain = c.ensureHosts(domain, *noHosts)
+		if c.autoSetup && !*noHosts {
+			if err := hosts.Add(domain); err != nil {
+				return fmt.Errorf("cannot configure requested domain %s: %w; add %s to %s or choose a .localhost domain", domain, err, hosts.Line(domain), hosts.Path())
+			}
+			c.man.AddHost(domain)
+			if err := c.man.Save(); err != nil {
+				return err
+			}
+		} else {
+			domain = c.ensureHosts(domain, *noHosts)
+		}
 	}
 	c.man.AddDomain(mp, domain)
 
@@ -506,6 +517,9 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		return serve.Run(application, ready)
 	}})
 	err = supervisor.RunServices(cfg.Context, services, func() {
+		if admin != nil {
+			_ = session.SetAdminURL(admin.LoginURL)
+		}
 		if err := session.Ready(cfg.URL()); err != nil {
 			ui.Warn("Could not record project readiness: %v", err)
 		}
@@ -649,10 +663,13 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 	wasApproved := c.man.CA != nil
 	if c.man.CA == nil || reinstall {
 		switch {
-		case ui.Confirm("Install laraserve's local CA in the system trust store? (name-constrained to " +
-			strings.Join(ca.Permitted, ", ") + "; removable with `laraserve untrust`)"):
+		case c.autoSetup || ui.Confirm("Install laraserve's local CA in the system trust store? (name-constrained to "+
+			strings.Join(ca.Permitted, ", ")+"; removable with `laraserve untrust`)"):
 			entry, err := trust.Install(ca)
 			if err != nil {
+				if c.autoSetup {
+					return nil, fmt.Errorf("HTTPS trust setup failed: %w; run laraserve trust from a terminal with permission to update the trust store", err)
+				}
 				ui.Warn("CA install failed: %v (browsers will show a warning)", err)
 			} else {
 				// Retain previously modified profiles so untrust can reverse them

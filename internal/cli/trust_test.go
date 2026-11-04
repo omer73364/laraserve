@@ -118,3 +118,41 @@ func TestNormalStartupRepairsApprovedBrowserTrustAndHonorsOptOut(t *testing.T) {
 		t.Fatal("opt-out changed previous trust record")
 	}
 }
+
+func TestDashboardSetupInstallsTrustWithoutTerminalPrompt(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("Linux trust installation")
+	}
+	home := t.TempDir()
+	bin := filepath.Join(home, "bin")
+	os.MkdirAll(bin, 0700)
+	for _, tool := range []string{"cp", "update-ca-certificates", "certutil", "sudo"} {
+		if err := os.WriteFile(filepath.Join(bin, tool), []byte("#!/bin/sh\nprintf '%s\\n' \"$0 $*\" >> \"$TRUST_LOG\"\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", bin)
+	t.Setenv("LARASERVE_HOME", filepath.Join(home, "state"))
+	t.Setenv("TRUST_LOG", filepath.Join(home, "calls"))
+	oldYes := ui.Yes
+	ui.Yes = false
+	t.Cleanup(func() { ui.Yes = oldYes })
+	c, err := load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.autoSetup = true
+	if _, err = c.ensureTrust(nil, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if c.man.CA == nil {
+		t.Fatal("automatic HTTPS setup skipped trust")
+	}
+	c.man.CA = nil
+	os.WriteFile(filepath.Join(bin, "update-ca-certificates"), []byte("#!/bin/sh\nexit 1\n"), 0700)
+	os.WriteFile(filepath.Join(bin, "sudo"), []byte("#!/bin/sh\nexit 1\n"), 0700)
+	if _, err = c.ensureTrust(nil, false, false); err == nil {
+		t.Fatal("failed automatic trust was silently accepted")
+	}
+}
