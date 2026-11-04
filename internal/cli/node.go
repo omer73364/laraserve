@@ -17,8 +17,8 @@ import (
 	"laraserve/internal/versions"
 )
 
-// Explicit Node/npm commands use the project's selected runtime. No dependencies
-// or lifecycle scripts are installed merely because an application starts.
+// Explicit Node/npm commands share the project-selected runtime with automatic
+// frontend preparation and Vite.
 func cmdNode(args []string, npm bool) error {
 	if err := process.InitOwnership(); err != nil {
 		return err

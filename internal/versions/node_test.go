@@ -56,3 +56,30 @@ func TestPackageManagerConflicts(t *testing.T) {
 		t.Fatal("accepted conflicting lockfile")
 	}
 }
+
+func TestProjectsChooseDifferentCompatibleBuildToolNodeVersions(t *testing.T) {
+	available := []string{"18.20.8", "20.20.0", "22.22.0", "24.10.0"}
+	for _, tc := range []struct{ engine, want string }{{"^18 || ^20", "20.20.0"}, {"^22.12 || ^24", "24.10.0"}} {
+		root := t.TempDir()
+		os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"devDependencies":{"vite":"*"}}`), 0600)
+		os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{"packages":{"node_modules/vite":{"engines":{"node":"`+tc.engine+`"}}}}`), 0600)
+		got, e := ProjectNode(root, available, "", "24.10.0")
+		if e != nil || got != tc.want {
+			t.Fatal(tc, got, e)
+		}
+	}
+}
+
+func TestDefaultNodePrefersLTSButHonorsProjectPin(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"engines":{"node":">=20"}}`), 0600)
+	available := []string{"22.22.0", "24.10.0", "26.1.0"}
+	got, e := ProjectNode(root, available, "", "", "22.22.0", "24.10.0")
+	if e != nil || got != "24.10.0" {
+		t.Fatal(got, e)
+	}
+	got, e = ProjectNode(root, available, "26", "", "24.10.0")
+	if e != nil || got != "26.1.0" {
+		t.Fatal(got, e)
+	}
+}

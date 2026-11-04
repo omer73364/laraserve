@@ -195,3 +195,14 @@ func UpdateEnvironment(home, root, id, revision string, changes map[string]strin
 	}
 	return ReadEnvironment(root)
 }
+
+// EnvironmentValues is for local runtime preparation only. Unlike the editable
+// dashboard document, it is not masked and must never be returned by an API.
+func EnvironmentValues(root string) (map[string]string, error) {
+	b, e := readEnv(root, ".env")
+	if e != nil {
+		return nil, e
+	}
+	values, _, e := parseEnv(b)
+	return values, e
+}

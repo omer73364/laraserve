@@ -17,10 +17,13 @@ import (
 	"syscall"
 	"time"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/certs"
 	"laraserve/internal/detect"
+	"laraserve/internal/elevate"
 	"laraserve/internal/env"
 	"laraserve/internal/filelock"
+	"laraserve/internal/frontend"
 	"laraserve/internal/hosts"
 	"laraserve/internal/mysql"
 	"laraserve/internal/pack"
@@ -85,6 +88,9 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	activity.SetFile(filepath.Join(h.Root, "control", registryID+"-progress.json"))
+	activity.Plan("Inspect project", "Prepare environment", "Prepare PHP", "Install PHP dependencies", "Configure domain and port", "Configure HTTPS", "Prepare database", "Prepare frontend", "Start services")
+	activity.Start("Inspect project")
 	var runErr error
 	defer func() { session.Close(runErr) }()
 	store, err := projectStore(h)
@@ -106,6 +112,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		if session.Context().Err() != nil {
 			result = nil
 		}
+		activity.Finish(result)
 		*runErr = result
 	}()
 	fs := options.fs
@@ -164,7 +171,11 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			*domainF = previous.Domain
 		}
 		if !explicit["port"] {
-			*portF = previous.Port
+			if previous.RequestedPort != nil {
+				*portF = *previous.RequestedPort
+			} else {
+				*portF = previous.Port
+			}
 		}
 		if !explicit["http"] {
 			*httpF = !previous.HTTPS
@@ -176,6 +187,10 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		return err
 	}
 
+	activity.Start("Prepare environment")
+	if err := prepare.EnsureEnvironment(root); err != nil {
+		return err
+	}
 	configDoc, err := projectconfig.Read(root)
 	if err != nil {
 		return err
@@ -190,6 +205,10 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		}
 	}
 	defaults := configDoc.Config
+	automaticServices(root, &defaults)
+	if (defaults.Services.AutoDetect == nil || *defaults.Services.AutoDetect) && frontend.NeedsVite(root) {
+		defaults.Services.Vite = true
+	}
 	if !actual["domain"] && defaults.Domain != "" {
 		*domainF = defaults.Domain
 	}
@@ -219,6 +238,8 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		record.Domain = previous.Domain
 		record.Port = previous.Port
 	}
+	requestedPort := *portF
+	record.RequestedPort = &requestedPort
 	record.Args = rememberServeArgs(fs, abs)
 	if err := registry.Save(record); err != nil {
 		return err
@@ -259,6 +280,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			return err
 		}
 	}
+	activity.Start("Prepare PHP")
 	// ---- 3. select and download the project's PHP runtime ----
 	rt, err := runtime.EnsurePHP(c.home.Runtimes(), selectedPHP)
 	if err != nil {
@@ -277,6 +299,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		return err
 	}
 
+	activity.Start("Install PHP dependencies")
 	// ---- 5. dependencies ----
 	if !proj.HasVendor {
 		if err := runtime.EnsureComposer(rt); err != nil {
@@ -294,6 +317,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 	}
 	ui.OK("Dependencies ready")
 
+	activity.Start("Configure domain and port")
 	// ---- 6. domain ----
 	domain := strings.ToLower(strings.TrimSpace(*domainF))
 	if domain == "" {
@@ -309,6 +333,9 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			domain, strings.Join(certs.DefaultPermitted, ", "), domain)
 	}
 	if !hosts.IsLoopbackName(domain) && !hosts.Resolves(domain) {
+		if c.autoSetup && *noHosts {
+			return fmt.Errorf("The requested domain %s does not resolve locally, and --no-hosts disables automatic setup. Use a .localhost domain or remove that opt-out before starting", domain)
+		}
 		if c.autoSetup && !*noHosts {
 			if err := hosts.Add(domain); err != nil {
 				return fmt.Errorf("cannot configure requested domain %s: %w; add %s to %s or choose a .localhost domain", domain, err, hosts.Line(domain), hosts.Path())
@@ -328,11 +355,12 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 	if rt.ServerPHP != "" {
 		serverRuntime.PHP = rt.ServerPHP
 	}
-	port, err := choosePort(&serverRuntime, *host, *portF, https, *domainF != "")
+	port, err := choosePort(&serverRuntime, *host, *portF, https, *domainF != "", c.autoSetup)
 	if err != nil {
 		return err
 	}
 
+	activity.Start("Configure HTTPS")
 	// ---- 8. TLS ----
 	lan := *host == "0.0.0.0"
 	var certPath, keyPath string
@@ -350,6 +378,8 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 			return err
 		}
 		ui.OK("Certificate ready for %s", domain)
+	} else {
+		activity.Skip("Configure HTTPS", "HTTP selected")
 	}
 
 	cfg := serve.Config{
@@ -357,6 +387,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		Port: port, HTTPS: https, Cert: certPath, Key: keyPath, LAN: lan, Verbose: *verbose, Context: session.Context(),
 	}
 
+	activity.Start("Prepare database")
 	// ---- 9. app environment (nothing written into the project) ----
 	cfg.AppEnv = st.AppEnv(root, cfg.URL())
 	if !actual["mysql"] && defaults.Database == "external" {
@@ -405,7 +436,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		}
 		ui.OK("MySQL %s ready (database: %s)", selectedMySQL, db.Env["DB_DATABASE"])
 	}
-	development, err := prepareDevelopment(c.home.Runtimes(), configDoc.Config, &cfg, rt)
+	development, err := prepareDevelopment(c.home.Runtimes(), defaults, &cfg, rt)
 	if err != nil {
 		return err
 	}
@@ -468,7 +499,7 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 				return err
 			}
 		}
-		adminURL := (serve.Config{Domain: "localhost", Port: adminPort, HTTPS: https}).URL()
+		adminURL := (serve.Config{Domain: "127.0.0.1", Port: adminPort, HTTPS: https}).URL()
 		admin, err = phpmyadmin.Prepare(source, st.Dir, adminURL, db.Env)
 		if err != nil {
 			return err
@@ -516,7 +547,9 @@ func runRegisteredServe(options *serveOptions, h *paths.Home, session *superviso
 		application.Context = lifetime
 		return serve.Run(application, ready)
 	}})
+	activity.Start("Start services")
 	err = supervisor.RunServices(cfg.Context, services, func() {
+		activity.Finish(nil)
 		if admin != nil {
 			_ = session.SetAdminURL(admin.LoginURL)
 		}
@@ -699,9 +732,29 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 	return ca, c.man.Save()
 }
 
-func choosePort(rt *runtime.Runtime, host string, explicit int, https, hasDomain bool) (int, error) {
+func choosePort(rt *runtime.Runtime, host string, explicit int, https, hasDomain bool, automatic ...bool) (int, error) {
 	if explicit != 0 {
-		return serve.FreePort(host, explicit, true)
+		selected, err := serve.FreePort(host, explicit, true)
+		if goruntime.GOOS == "linux" && explicit < 1024 && (errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)) {
+			if linuxLowPortAllowed(rt.PHP) {
+				return explicit, nil
+			}
+			if len(automatic) > 0 && automatic[0] {
+				cmd, e := elevate.Command("setcap", "cap_net_bind_service=+ep", rt.PHP)
+				if e != nil {
+					return 0, e
+				}
+				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+				if e = cmd.Run(); e != nil {
+					return 0, fmt.Errorf("permission to use port %d was denied: %w", explicit, e)
+				}
+				return explicit, nil
+			}
+		}
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return 0, fmt.Errorf("Port %d is already in use. Choose another port, or leave Port empty to choose automatically.\n%w", explicit, err)
+		}
+		return selected, err
 	}
 	if https && hasDomain && privilegedPortOK(rt, host) {
 		return 443, nil

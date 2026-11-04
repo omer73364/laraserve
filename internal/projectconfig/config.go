@@ -34,14 +34,15 @@ type Config struct {
 	PHPRaw      string            `json:"php_ini,omitempty"`
 }
 
-// Services are opt-in: starting an existing app never installs dependencies or
-// consumes queued jobs unless the user has enabled the corresponding service.
+// Local frontend/cache/mail services can be detected automatically. Workers and
+// schema changes require explicit project choices. AutoDetect=false opts out.
 type Services struct {
-	Vite      bool `json:"vite,omitempty"`
-	Queue     bool `json:"queue,omitempty"`
-	Scheduler bool `json:"scheduler,omitempty"`
-	Redis     bool `json:"redis,omitempty"`
-	Mailpit   bool `json:"mailpit,omitempty"`
+	AutoDetect *bool `json:"auto_detect,omitempty"`
+	Vite       bool  `json:"vite,omitempty"`
+	Queue      bool  `json:"queue,omitempty"`
+	Scheduler  bool  `json:"scheduler,omitempty"`
+	Redis      bool  `json:"redis,omitempty"`
+	Mailpit    bool  `json:"mailpit,omitempty"`
 }
 type Document struct {
 	Config   Config `json:"config"`

@@ -20,20 +20,21 @@ import (
 )
 
 type Project struct {
-	Removed  bool     `json:"removed,omitempty"`
-	Schema   int      `json:"schema"`
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Source   string   `json:"source"`
-	Root     string   `json:"root"`
-	Args     []string `json:"serve_args,omitempty"`
-	Domain   string   `json:"domain,omitempty"`
-	Port     int      `json:"port,omitempty"`
-	HTTPS    bool     `json:"https"`
-	PHP      string   `json:"php,omitempty"`
-	MySQL    string   `json:"mysql,omitempty"`
-	Database string   `json:"database,omitempty"`
-	Updated  string   `json:"updated_utc"`
+	RequestedPort *int     `json:"requested_port,omitempty"`
+	Removed       bool     `json:"removed,omitempty"`
+	Schema        int      `json:"schema"`
+	ID            string   `json:"id"`
+	Name          string   `json:"name"`
+	Source        string   `json:"source"`
+	Root          string   `json:"root"`
+	Args          []string `json:"serve_args,omitempty"`
+	Domain        string   `json:"domain,omitempty"`
+	Port          int      `json:"port,omitempty"`
+	HTTPS         bool     `json:"https"`
+	PHP           string   `json:"php,omitempty"`
+	MySQL         string   `json:"mysql,omitempty"`
+	Database      string   `json:"database,omitempty"`
+	Updated       string   `json:"updated_utc"`
 }
 
 type Store struct{ Dir string }

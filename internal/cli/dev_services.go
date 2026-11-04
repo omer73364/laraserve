@@ -12,14 +12,15 @@ import (
 	"strconv"
 	"sync"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/devservice"
+	"laraserve/internal/frontend"
 	"laraserve/internal/projectconfig"
 	"laraserve/internal/runtime"
 	"laraserve/internal/serve"
 	"laraserve/internal/statefile"
 	"laraserve/internal/supervisor"
 	"laraserve/internal/ui"
-	"laraserve/internal/versions"
 )
 
 type developmentServices struct {
@@ -181,17 +182,27 @@ func prepareDevelopment(cache string, c projectconfig.Config, cfg *serve.Config,
 		cfg.AppEnv["MAIL_URL"] = "smtp://" + smtp
 		d.fields = append(d.fields, ui.Field{Label: "Mailpit", Value: "http://" + web})
 	}
-	if c.Services.Vite {
-		if _, _, err := versions.PackageManager(cfg.Root); err != nil {
-			return nil, err
-		}
-		entry := filepath.Join(cfg.Root, "node_modules", "vite", "dist", "node", "index.js")
-		if info, err := os.Stat(entry); err != nil || !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("Vite dependencies are missing. Open Commands, choose npm install, then restart (for yarn/pnpm projects, use the matching package manager)")
-		}
-		node, err := projectNode(cache, cfg.Root)
+	activity.Start("Prepare frontend")
+	frontendWanted := c.Services.Vite || ((c.Services.AutoDetect == nil || *c.Services.AutoDetect) && frontend.HasPackage(cfg.Root))
+	var frontendNode *runtime.NodeRuntime
+	if frontendWanted {
+		node, err := frontend.EnsureDependencies(cfg.Context, cache, cfg.Root, cfg.StateDir)
 		if err != nil {
 			return nil, err
+		}
+		frontendNode = node
+		if !c.Services.Vite {
+			if err = frontend.Build(cfg.Context, node, cfg.Root); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if c.Services.Vite {
+		node := frontendNode
+		var err error
+		entry := filepath.Join(cfg.Root, "node_modules", "vite", "dist", "node", "index.js")
+		if _, err = os.Stat(entry); err != nil {
+			return nil, fmt.Errorf("frontend installation completed but this project does not provide Vite: %w", err)
 		}
 		address, err := d.address()
 		if err != nil {
@@ -219,6 +230,9 @@ func prepareDevelopment(cache string, c projectconfig.Config, cfg *serve.Config,
 		d.fields = append(d.fields, ui.Field{Label: "Node", Value: node.Version}, ui.Field{Label: "Vite", Value: scheme + "://" + net.JoinHostPort(cfg.Domain, port)})
 		// Pass the managed Node directory to all selected processes after env.Build.
 		d.node = node
+	}
+	if !frontendWanted {
+		activity.Skip("Prepare frontend", "No Vite frontend selected or detected")
 	}
 	if c.Services.Queue {
 		cmd := command("queue", rt.PHP, "artisan", "queue:work", "--sleep=1", "--tries=1", "--timeout=60")

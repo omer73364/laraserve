@@ -79,7 +79,7 @@ func runStartupProjects(ctx context.Context, home string) {
 			result = append(result, item{ID: p.ID, Name: p.Name, State: state.Status})
 			continue
 		}
-		launch, done := context.WithTimeout(ctx, 2*time.Minute)
+		launch, done := context.WithTimeout(ctx, 20*time.Minute)
 		_, err = supervisor.Launch(launch, supervisor.LaunchRequest{Home: home, Project: *p, Args: append(projects.ReusableArgs(p), "--setup-local")})
 		done()
 		entry := item{ID: p.ID, Name: p.Name, State: "running"}

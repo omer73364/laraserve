@@ -5,10 +5,10 @@ package scaffold
 import (
 	"context"
 	"fmt"
+	"laraserve/internal/activity"
 	"laraserve/internal/frontend"
-	"laraserve/internal/process"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -78,6 +78,8 @@ func (r Request) Validate() error {
 	return nil
 }
 func Create(ctx context.Context, home string, r Request) error {
+	activity.Plan("Validate destination", "Prepare PHP", "Create project", "Configure environment", "Install frontend dependencies", "Initialize database", "Register project")
+	activity.Start("Validate destination")
 	if err := r.Validate(); err != nil {
 		return err
 	}
@@ -100,6 +102,7 @@ func Create(ctx context.Context, home string, r Request) error {
 	if err = guardCreationState(home, root); err != nil {
 		return err
 	}
+	activity.Start("Prepare PHP")
 	selected := r.PHP
 	var rt *runtime.Runtime
 	if selected != "" {
@@ -119,6 +122,7 @@ func Create(ctx context.Context, home string, r Request) error {
 	}
 	stateDir := filepath.Join(home, "projects", paths.ProjectID(root))
 	baseEnv := env.Build(rt, stateDir, r.HostPath, nil)
+	activity.Start("Create project")
 	if r.OfficialWizard {
 		if err = officialWizard(ctx, home, rt, root, r, baseEnv); err != nil {
 			return err
@@ -145,6 +149,10 @@ func Create(ctx context.Context, home string, r Request) error {
 		if err = os.WriteFile(filepath.Join(root, ".php-version"), []byte(r.PHP+"\n"), 0644); err != nil {
 			return err
 		}
+	}
+	activity.Start("Configure environment")
+	if err = prepare.EnsureEnvironment(root); err != nil {
+		return err
 	}
 	if !r.OfficialWizard {
 		doc, e := projectconfig.ReadEnvironment(root)
@@ -178,12 +186,15 @@ func Create(ctx context.Context, home string, r Request) error {
 		return err
 	}
 	config := doc.Config
+	autoDetect := false
+	config.Services.AutoDetect = &autoDetect
 	config.Domain, config.Port, config.HTTPS = r.Domain, r.Port, r.HTTPS
 	config.Database = map[string]string{"": "sqlite", "sqlite": "sqlite", "mysql": "managed", "external": "external"}[r.Database]
 	if _, err = projectconfig.Save(home, root, paths.ProjectID(root), doc.Revision, config); err != nil {
 		return err
 	}
-	if r.Vite {
+	activity.Start("Install frontend dependencies")
+	if frontend.HasPackage(root) {
 		ui.Info("Installing frontend dependencies before enabling Vite")
 		manager, _, e := versions.PackageManager(root)
 		if e != nil {
@@ -192,18 +203,17 @@ func Create(ctx context.Context, home string, r Request) error {
 		if manager != "npm" {
 			return fmt.Errorf("project uses %s; install its frontend dependencies before enabling Vite", manager)
 		}
-		node, e := frontend.Select(filepath.Join(home, "runtimes"), root)
+		node, installErr := frontend.EnsureDependencies(ctx, filepath.Join(home, "runtimes"), root, stateDir)
+		e = installErr
 		if e != nil {
-			return e
-		}
-		cmd := exec.CommandContext(ctx, node.Node, node.NPM, "install")
-		cmd.Dir = root
-		cmd.Env = frontend.Environment(node, os.Environ())
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if e = process.RunOwned(cmd); e != nil {
 			return fmt.Errorf("frontend installation failed; app files retained: %w", e)
 		}
-		config.Services.Vite = true
+		if !r.Vite {
+			if e = frontend.Build(ctx, node, root); e != nil {
+				return e
+			}
+		}
+		config.Services.Vite = r.Vite
 		doc, err = projectconfig.Read(root)
 		if err != nil {
 			return err
@@ -220,6 +230,7 @@ func Create(ctx context.Context, home string, r Request) error {
 	if err = footprint.Save(); err != nil {
 		return err
 	}
+	activity.Start("Initialize database")
 	migrate := r.Migrate == nil || *r.Migrate
 	// An external DB is deliberately not migrated by a creation default.
 	if migrate && r.Database != "external" {
@@ -250,6 +261,7 @@ func Create(ctx context.Context, home string, r Request) error {
 			return fmt.Errorf("new project created but migration failed: %w; files and data were retained", e)
 		}
 	}
+	activity.Start("Register project")
 	canonical, err := projects.Canonical(root)
 	if err != nil {
 		return err

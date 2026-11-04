@@ -148,3 +148,27 @@ func EnsureNode(root, version string) (*NodeRuntime, error) {
 func nodeChecksumURL(raw string) string {
 	return strings.TrimSuffix(raw, path.Base(raw)) + "SHASUMS256.txt"
 }
+
+// NodeLTSVersions identifies publisher-designated LTS releases in the cached
+// index. Exact project pins can still select other published stable releases.
+func NodeLTSVersions(root string) []string {
+	b, e := os.ReadFile(filepath.Join(root, "node-releases.json"))
+	if e != nil || len(b) > 8<<20 {
+		return nil
+	}
+	var releases []struct {
+		Version string
+		LTS     json.RawMessage
+	}
+	if json.Unmarshal(b, &releases) != nil {
+		return nil
+	}
+	result := []string{}
+	for _, r := range releases {
+		var name string
+		if json.Unmarshal(r.LTS, &name) == nil && name != "" {
+			result = append(result, strings.TrimPrefix(r.Version, "v"))
+		}
+	}
+	return result
+}

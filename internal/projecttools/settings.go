@@ -113,10 +113,17 @@ func SaveSettings(ctx context.Context, home string, p *projects.Project, revisio
 	latest.Domain = c.Domain
 	if c.HTTPS != nil {
 		latest.HTTPS = *c.HTTPS
+	} else {
+		latest.HTTPS = true
 	}
+	requested := 0
 	if c.Port != nil {
+		requested = *c.Port
 		latest.Port = *c.Port
+	} else {
+		latest.Port = 0
 	}
+	latest.RequestedPort = &requested
 	return result, projects.New(home).Save(latest)
 }
 func SaveEnvironment(ctx context.Context, home string, p *projects.Project, revision string, changes map[string]string) (projectconfig.Environment, error) {

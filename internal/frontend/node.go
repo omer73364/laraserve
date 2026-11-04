@@ -22,7 +22,7 @@ func Select(cache, root string) (*runtime.NodeRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	selected, err := versions.ProjectNode(root, available, "", lock.Node)
+	selected, err := versions.ProjectNode(root, available, "", lock.Node, runtime.NodeLTSVersions(cache)...)
 	if err != nil {
 		return nil, err
 	}
