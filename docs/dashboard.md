@@ -69,3 +69,25 @@ Both Add app and Create app include **Browse**. The local modal lists directorie
 Folder listings and registration are authenticated, same-origin, CSRF-protected POST requests. Listings return bounded directory names and paths, not file contents; symlink entries are omitted, while a deliberately entered symlink path is resolved to its canonical folder. Hidden folders are off by default. No native picker program or shell command is launched.
 
 Dropdowns use a bundled custom control while retaining the form's original values. Arrow keys, Home/End, type-ahead, Enter/Space, Escape, Tab, and pointer selection are supported. Focus styling surrounds search fields rather than drawing a second outline around the inner input.
+
+## Client preferences and project lifecycle
+
+Settings contains Launch LaraServe at login, Open dashboard at login, opt-in daily release checks, a manual update check, and uninstall. Preferences live in private `preferences.json`, with revision checks to prevent overwriting concurrent edits. Release checks contact only the official repository's latest-release API and never download or install an update.
+
+Run on startup belongs to each project's Overview. Selected apps start when the dashboard opens, or through the login helper when client login startup is enabled. Reusable launch options exclude migrations and one-shot consent flags. Login integration uses a per-home XDG autostart entry on Linux, a user LaunchAgent on macOS, and a current-user Run registry value on Windows. Keep the portable executable in a stable location. Login changes apply at the next sign-in.
+
+Remove project requires a confirmation dialog, stops the owned app and services, clears its startup preference, and hides the registration. It preserves source files, private databases, and captured mail. Adding the same source folder restores its registration and options; legacy manifest imports do not resurrect removed apps.
+
+Uninstall requires both acknowledgement of permanent managed-data loss and typing `UNINSTALL`. It uses the existing CLI uninstaller, refuses active projects/tasks, removes the login integration, and closes the dashboard after success. Managed databases, caches, preferences, captured mail, and recorded generated workspaces/vendor folders may be removed. The portable executable remains for manual removal. System hosts/trust cleanup can require elevated OS permissions. Back up managed data first.
+
+## Creation, progress, and frontend commands
+
+Create app exposes destination browsing, starter kit, database, domain, port, HTTPS, Vite, and a styled initial-migration switch. Runtime and skeleton version fields are omitted from this main form. Connection choices are saved in `.laraserve.json`. Choosing a starter kit selects Vite by default; it remains optional. With Vite selected, creation installs npm dependencies with the project-selected managed Node runtime before enabling Vite. Non-npm lockfiles are reported rather than rewritten with npm. Partial files are retained if installation fails.
+
+Creation, runtime installation, and commands open a live output dialog. Successful creation opens the new project's Configuration; adding an existing app opens Configuration too. Errors remain available in the task output. Toasts show notifications at the viewport edge and can be dismissed; persistent failures are deduplicated. Lifecycle buttons expose pending states, and operation completion/failure produces a toast.
+
+Commands offers npm install, ci, run build, audit, and outdated, plus install/build shortcuts. These run as cancellable owned tasks without a shell. npm uses the same Node selection as Vite and refuses a project that declares another package manager. Dependency installation can run package lifecycle scripts; merely starting an existing app does not install frontend dependencies. For an older app with Vite enabled but missing dependencies, use Commands → npm install, then restart.
+
+Dashboard and automatic starts pass `--setup-local`: unresolved requested domains are added to the hosts file and HTTPS attempts local CA trust without a terminal prompt. Unlike the older noninteractive fallback, a failed hosts update preserves the requested domain and fails visibly instead of silently substituting `.localhost`. Trust failures also stop preparation with an actionable message. Explicit `--no-hosts` and `--no-trust` choices remain respected. System permission requirements still apply; a terminal with sufficient access may be needed for the initial setup.
+
+Open phpMyAdmin appears in each project's header. It is enabled only while that project's managed MySQL/phpMyAdmin instance is running, using its private per-run sign-in URL. It is disabled for SQLite, external databases, stopped apps, or disabled phpMyAdmin. Control tokens are never sent to the dashboard browser.
