@@ -12,7 +12,9 @@ import (
 	goruntime "runtime"
 	"strings"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/certs"
+	"laraserve/internal/elevate"
 	"laraserve/internal/manifest"
 	"laraserve/internal/paths"
 	"laraserve/internal/runtime"
@@ -20,13 +22,20 @@ import (
 )
 
 func run(sudo bool, name string, args ...string) error {
-	if sudo && goruntime.GOOS != "windows" && os.Geteuid() != 0 {
-		args = append([]string{name}, args...)
-		name = "sudo"
-	}
 	cmd := exec.Command(name, args...)
+	if sudo && goruntime.GOOS != "windows" {
+		var err error
+		cmd, err = elevate.Command(name, args...)
+		if err != nil {
+			return err
+		}
+	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
+	err := cmd.Run()
+	if err == nil {
+		activity.Detail("System trust setup completed")
+	}
+	return err
 }
 
 func have(bin string) bool { _, err := exec.LookPath(bin); return err == nil }
