@@ -162,15 +162,27 @@ func buildToolEngines(root string) ([]*semver.Constraints, error) {
 	b, err := projectconfig.ReadRegular(filepath.Join(root, "package-lock.json"), 32<<20)
 	if err == nil {
 		var lock struct {
-			Packages map[string]struct {
-				Engines map[string]string `json:"engines"`
-			} `json:"packages"`
+			Packages map[string]json.RawMessage `json:"packages"`
 		}
 		if err = json.Unmarshal(b, &lock); err != nil {
 			return nil, fmt.Errorf("package-lock.json: %w", err)
 		}
 		for _, name := range names {
-			raw[name] = lock.Packages["node_modules/"+name].Engines["node"]
+			entry := lock.Packages["node_modules/"+name]
+			if len(entry) == 0 {
+				continue
+			}
+			var pkg struct {
+				Engines struct {
+					Node string `json:"node"`
+				} `json:"engines"`
+			}
+			// Decode only tools that influence runtime selection. Older npm
+			// packages can contain array-valued engines and other legacy metadata.
+			if err := json.Unmarshal(entry, &pkg); err != nil {
+				return nil, fmt.Errorf("package-lock.json: %s: %w", name, err)
+			}
+			raw[name] = pkg.Engines.Node
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err

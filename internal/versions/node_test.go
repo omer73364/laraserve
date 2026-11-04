@@ -83,3 +83,26 @@ func TestDefaultNodePrefersLTSButHonorsProjectPin(t *testing.T) {
 		t.Fatal(got, e)
 	}
 }
+
+func TestLockfileLegacyDependencyEngines(t *testing.T) {
+	root := t.TempDir()
+	lock := `{"packages":{
+		"node_modules/legacy-package":{"engines":["node >=0.4"]},
+		"node_modules/another-package":{"engines":[]},
+		"node_modules/webpack":{"engines":{"node":"^18 || ^20","npm":["legacy"]}},
+		"node_modules/laravel-mix":{"engines":{"node":">=18"}}
+	}}`
+	if err := os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(lock), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := ProjectNode(root, []string{"18.20.8", "20.20.0", "24.10.0"}, "", "24.10.0")
+	if err != nil || got != "20.20.0" {
+		t.Fatalf("legacy metadata must preserve build-tool constraints: got %q, %v", got, err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "package-lock.json"), []byte(`{"packages":`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ProjectNode(root, []string{"20.20.0"}, "", ""); err == nil {
+		t.Fatal("accepted malformed lockfile")
+	}
+}
