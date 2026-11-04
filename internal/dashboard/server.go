@@ -22,9 +22,11 @@ import (
 	"laraserve/internal/appsettings"
 	"laraserve/internal/devservice"
 	"laraserve/internal/metrics"
+	"laraserve/internal/paths"
 	"laraserve/internal/projects"
 	"laraserve/internal/projecttools"
 	"laraserve/internal/supervisor"
+	"laraserve/internal/versions"
 )
 
 //go:embed assets/*
@@ -36,6 +38,8 @@ type Operation struct {
 	Error   string `json:"error,omitempty"`
 }
 type View struct {
+	Node          string              `json:"node,omitempty"`
+	NodeReason    string              `json:"node_reason,omitempty"`
 	AdminURL      string              `json:"admin_url,omitempty"`
 	Startup       bool                `json:"startup"`
 	Laravel       string              `json:"laravel"`
@@ -178,6 +182,12 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			}
 			v.Startup = preferences.Config.Projects[p.ID]
 			v.Laravel, v.LaravelSource = laravelVersion(p.Source)
+			if pins, e := versions.ReadLock(filepath.Join(s.home, "runtimes", "node-project-"+paths.ProjectID(p.Source)+".json")); e == nil {
+				v.Node = pins.Node
+				if pins.NodeSelection != nil {
+					v.NodeReason = pins.NodeSelection.Explanation()
+				}
+			}
 			if privateID, e := s.privateID(p); e == nil {
 				v.Services = devservice.ReadStatus(filepath.Join(s.home, "projects", privateID), state.Generation, state.Status)
 			}

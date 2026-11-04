@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"laraserve/internal/activity"
 	"laraserve/internal/paths"
 	"laraserve/internal/runtime"
 	"laraserve/internal/versions"
@@ -22,15 +23,16 @@ func Select(cache, root string) (*runtime.NodeRuntime, error) {
 	if err != nil {
 		return nil, err
 	}
-	selected, err := versions.ProjectNode(root, available, "", lock.Node, runtime.NodeLTSVersions(cache)...)
+	selection, err := versions.ResolveProjectNode(root, available, "", lock.Node, runtime.NodeLTSVersions(cache)...)
 	if err != nil {
 		return nil, err
 	}
-	node, err := runtime.EnsureNode(cache, selected)
+	activity.Detail("Node " + selection.Version + " · " + selection.Explanation())
+	node, err := runtime.EnsureNode(cache, selection.Version)
 	if err != nil {
 		return nil, err
 	}
-	if err = versions.WriteLock(lockFile, versions.Pins{Node: selected}); err != nil {
+	if err = versions.WriteLock(lockFile, versions.Pins{Node: selection.Version, NodeSelection: &selection}); err != nil {
 		return nil, err
 	}
 	return node, nil

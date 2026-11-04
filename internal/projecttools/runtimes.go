@@ -2,6 +2,7 @@ package projecttools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,12 +11,16 @@ import (
 	"strings"
 
 	"laraserve/internal/filelock"
+	"laraserve/internal/projectconfig"
 	"laraserve/internal/projects"
 	"laraserve/internal/runtime"
 	"laraserve/internal/supervisor"
 )
 
 type CacheEntry struct {
+	Kind      string `json:"kind,omitempty"`
+	Version   string `json:"version,omitempty"`
+	NPM       string `json:"npm,omitempty"`
 	Key       string `json:"key"`
 	Bytes     int64  `json:"bytes"`
 	Protected bool   `json:"protected"`
@@ -28,6 +33,7 @@ type Inventory struct {
 }
 
 var cacheName = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]*-[a-f0-9]{20}$`)
+var cacheVersion = regexp.MustCompile(`^(php|mysql|node)-([0-9]+\.[0-9]+\.[0-9]+)-`)
 
 func RuntimeInventory(home string) (Inventory, error) {
 	result := Inventory{PHP: runtime.PHPVersions(), MySQL: runtime.MySQLVersions(), Installed: []CacheEntry{}}
@@ -80,6 +86,12 @@ func RuntimeInventory(home string) (Inventory, error) {
 			continue
 		}
 		item := CacheEntry{Key: key}
+		if parts := cacheVersion.FindStringSubmatch(key); parts != nil {
+			item.Kind, item.Version = parts[1], parts[2]
+			if item.Kind == "node" {
+				item.NPM = cachedNPMVersion(path)
+			}
+		}
 		item.Protected = references[key] || missingSnapshot
 		if references[key] {
 			item.Reason = "Referenced by a registered project's recorded runtime"
@@ -90,6 +102,9 @@ func RuntimeInventory(home string) (Inventory, error) {
 		if !(strings.HasPrefix(key, "php-") || strings.HasPrefix(key, "mysql-")) {
 			item.Protected = true
 			item.Reason = "Shared dependency cache"
+			if item.Kind == "node" {
+				item.Reason = "Shared Node runtime; retained for project commands and frontend tasks"
+			}
 		}
 		if strings.HasPrefix(key, "php-") && strings.Contains(key, "-ini-") {
 			item.Protected = true
@@ -115,6 +130,23 @@ func RuntimeInventory(home string) (Inventory, error) {
 	}
 	sort.Slice(result.Installed, func(i, j int) bool { return result.Installed[i].Key < result.Installed[j].Key })
 	return result, nil
+}
+
+// Inspect package metadata without executing npm or contacting the registry.
+func cachedNPMVersion(dir string) string {
+	for _, name := range []string{filepath.Join("lib", "node_modules", "npm", "package.json"), filepath.Join("node_modules", "npm", "package.json")} {
+		data, err := projectconfig.ReadRegular(filepath.Join(dir, name), 1<<20)
+		if err != nil {
+			continue
+		}
+		var pkg struct {
+			Version string `json:"version"`
+		}
+		if json.Unmarshal(data, &pkg) == nil {
+			return pkg.Version
+		}
+	}
+	return ""
 }
 
 // RemoveUnusedCache rechecks ownership, references, and the selected cache key

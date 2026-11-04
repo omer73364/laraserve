@@ -16,9 +16,10 @@ import (
 )
 
 type Pins struct {
-	Node  string `json:"node,omitempty"`
-	PHP   string `json:"php,omitempty"`
-	MySQL string `json:"mysql,omitempty"`
+	NodeSelection *NodeSelection `json:"node_selection,omitempty"`
+	Node          string         `json:"node,omitempty"`
+	PHP           string         `json:"php,omitempty"`
+	MySQL         string         `json:"mysql,omitempty"`
 }
 
 func ReadLock(path string) (Pins, error) {

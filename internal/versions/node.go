@@ -12,16 +12,53 @@ import (
 	"laraserve/internal/projectconfig"
 )
 
-// ProjectNode checks both an explicit version selection and the package engine.
-// Prefer established LTS lines (22, then 24) before newer LTS releases.
+// NodeSelection explains the resolved runtime without executing project code.
+type NodeSelection struct {
+	Version    string   `json:"version"`
+	Source     string   `json:"source"`
+	Pin        string   `json:"pin,omitempty"`
+	Engine     string   `json:"engine,omitempty"`
+	Reused     bool     `json:"reused,omitempty"`
+	BuildTools []string `json:"build_tools,omitempty"`
+}
+
+func (s NodeSelection) Explanation() string {
+	text := s.Source
+	if s.Pin != "" {
+		text += " · " + s.Pin
+	}
+	if s.Engine != "" {
+		text += " · app requires " + s.Engine
+	}
+	if s.Reused {
+		text += " · keeping compatible selection"
+	}
+	if len(s.BuildTools) > 0 {
+		text += " · build tools require " + strings.Join(s.BuildTools, "; ")
+	}
+	return text
+}
+
 func ProjectNode(root string, available []string, override, locked string, preferred ...string) (string, error) {
+	selection, err := ResolveProjectNode(root, available, override, locked, preferred...)
+	return selection.Version, err
+}
+
+func ResolveProjectNode(root string, available []string, override, locked string, preferred ...string) (NodeSelection, error) {
+	selection := NodeSelection{Source: "Automatic compatibility selection"}
 	doc, err := projectconfig.Read(root)
 	if err != nil {
-		return "", err
+		return NodeSelection{}, err
 	}
 	pin := override
+	if pin != "" {
+		selection.Source = "Explicit override"
+	}
 	if pin == "" {
 		pin = doc.Config.Node
+		if pin != "" {
+			selection.Source = ".laraserve.json"
+		}
 	}
 	if pin == "" {
 		for _, name := range []string{".node-version", ".nvmrc"} {
@@ -30,17 +67,16 @@ func ProjectNode(root string, available []string, override, locked string, prefe
 				continue
 			}
 			if e != nil {
-				return "", e
+				return NodeSelection{}, e
 			}
 			pin = strings.TrimSpace(string(b))
 			if pin != "" {
+				selection.Source = name
 				break
 			}
 		}
 	}
-	if pin == "node" || pin == "lts/*" {
-		pin = "latest"
-	}
+
 	var pkg struct {
 		Volta struct {
 			Node string `json:"node"`
@@ -52,22 +88,35 @@ func ProjectNode(root string, available []string, override, locked string, prefe
 		err = json.Unmarshal(b, &pkg)
 	}
 	if err != nil && !os.IsNotExist(err) {
-		return "", fmt.Errorf("package.json: %w", err)
+		return NodeSelection{}, fmt.Errorf("package.json: %w", err)
 	}
 	if pin == "" && pkg.Volta.Node != "" {
 		pin = pkg.Volta.Node
+		selection.Source = "package.json → volta.node"
+	}
+	selection.Pin = pin
+	// LTS aliases follow compatibility selection, not the newest major.
+	if pin == "lts/*" {
+		pin = ""
+	} else if pin == "node" {
+		pin = "latest"
 	}
 	var engine *semver.Constraints
 	if raw := pkg.Engines["node"]; raw != "" {
+		selection.Engine = raw
 		engine, err = semver.NewConstraint(raw)
 		if err != nil {
-			return "", fmt.Errorf("unsupported Node engine %q: %w", raw, err)
+			return NodeSelection{}, fmt.Errorf("unsupported Node engine %q: %w", raw, err)
 		}
 	}
 	toolEngines, err := buildToolEngines(root)
 	if err != nil {
-		return "", err
+		return NodeSelection{}, err
 	}
+	for _, requirement := range toolEngines {
+		selection.BuildTools = append(selection.BuildTools, requirement.String())
+	}
+	sort.Strings(selection.BuildTools)
 	list := append([]string(nil), available...)
 	lts := map[string]bool{}
 	for _, v := range preferred {
@@ -123,11 +172,15 @@ func ProjectNode(root string, available []string, override, locked string, prefe
 				}
 			}
 			if compatible {
-				return v, nil
+				selection.Version = v
+				if pin == "" && v == locked {
+					selection.Reused = true
+				}
+				return selection, nil
 			}
 		}
 	}
-	return "", fmt.Errorf("no Node version matches pin %q and project/build-tool engines; update the pin or choose compatible dependencies", pin)
+	return NodeSelection{}, fmt.Errorf("no compatible Node version: %s pin %q, package.json engines.node %q, build-tool requirements [%s]. Choose a compatible project pin or update conflicting dependencies", selection.Source, selection.Pin, selection.Engine, strings.Join(selection.BuildTools, "; "))
 }
 
 // PackageManager refuses ambiguous lockfiles instead of installing with the wrong

@@ -12,8 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"laraserve/internal/paths"
 	"laraserve/internal/projects"
 	"laraserve/internal/supervisor"
+	"laraserve/internal/versions"
 )
 
 func fixture(t *testing.T) (*Server, *projects.Project) {
@@ -95,6 +97,37 @@ func TestAccessBoundaries(t *testing.T) {
 		if strings.Contains(w.Body.String(), secret) {
 			t.Fatal("private control data exposed", secret)
 		}
+	}
+}
+
+func TestProjectViewUsesRecordedNodeSelection(t *testing.T) {
+	s, p := fixture(t)
+	selection := &versions.NodeSelection{Version: "22.23.0", Source: ".nvmrc", Pin: "22", Engine: ">=20"}
+	path := filepath.Join(s.home, "runtimes", "node-project-"+paths.ProjectID(p.Source)+".json")
+	if err := versions.WriteLock(path, versions.Pins{Node: selection.Version, NodeSelection: selection}); err != nil {
+		t.Fatal(err)
+	}
+	response := call(s, "GET", "/api/projects", "", true, false, "")
+	var views []View
+	if response.Code != 200 {
+		t.Fatal(response.Body.String())
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &views); err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Node != selection.Version || views[0].NodeReason != selection.Explanation() {
+		t.Fatalf("%+v", views)
+	}
+	// A settings edit must not pretend that a new Node version is already in use.
+	if err := os.WriteFile(filepath.Join(p.Source, ".nvmrc"), []byte("24"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	response = call(s, "GET", "/api/projects", "", true, false, "")
+	if err := json.Unmarshal(response.Body.Bytes(), &views); err != nil {
+		t.Fatal(err)
+	}
+	if views[0].Node != "22.23.0" {
+		t.Fatal("reported an unprepared version as selected")
 	}
 }
 func TestDashboardStopUsesOwnerControl(t *testing.T) {

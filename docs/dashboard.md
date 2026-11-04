@@ -106,3 +106,7 @@ Automatic ports remain automatic on subsequent starts: the actual previously ass
 Linux administrator actions use a desktop polkit prompt or a configured `SUDO_ASKPASS`; an interactive terminal can still use sudo. macOS hosts changes use the system administrator prompt. Windows hosts changes request UAC. Passwords never pass through the browser, preferences, process arguments, or logs. Cancelling/denying authorization stops preparation. Headless systems without an authentication agent or cached authorization show the exact setup requirement. Native Windows/macOS authorization still requires platform verification.
 
 phpMyAdmin accepts both loopback host aliases, and its sign-on cookie allows the dashboard’s navigation while retaining token validation and HttpOnly/Secure protections. Its project button opens a fresh per-run sign-in link; it is not a static link to the phpMyAdmin root.
+
+### App workspace layout
+
+The dashboard uses a persistent desktop sidebar with workspace navigation and project shortcuts showing current status. A compact toolbar displays the current section or project. Appearance and notification history remain available in the sidebar footer. On narrow screens, the sidebar becomes a keyboard-accessible drawer: closed navigation is inert, Tab stays inside the open drawer, and Escape closes it and restores focus to the navigation button. Existing project controls and settings remain available.

@@ -3,17 +3,22 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LaraServe · Projects</title><link rel="icon" href="/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/controls.js" defer></script><script src="/notifications.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <a class="skip-link" href="#main-content">Skip to content</a>
-<header class="app-header">
+<aside class="app-header" id="app-sidebar" aria-label="Workspace sidebar">
  <a class="brand" href="#projects" aria-label="LaraServe home"><img src="/logo.svg" width="34" height="34" alt="">LaraServe<span class="edition">LOCAL</span></a>
- <nav class="global-nav" aria-label="Workspace"><a href="#projects" data-nav="projects">Projects <span id="nav-count">0</span></a><a href="#runtimes" data-nav="runtimes">Runtimes</a><a href="#application" data-nav="application">Settings</a><a href="#activity" data-nav="activity">Activity<span id="activity-dot" hidden>•</span></a></nav>
+ <div class="sidebar-caption">WORKSPACE</div>
+ <nav class="global-nav" aria-label="Workspace"><a href="#projects" data-nav="projects"><span class="nav-icon" aria-hidden="true">▦</span>Projects <span id="nav-count">0</span></a><a href="#runtimes" data-nav="runtimes"><span class="nav-icon" aria-hidden="true">◇</span>Runtimes</a><a href="#activity" data-nav="activity"><span class="nav-icon" aria-hidden="true">↗</span>Activity<span id="activity-dot" hidden>•</span></a><a href="#application" data-nav="application"><span class="nav-icon" aria-hidden="true">⚙</span>Settings</a></nav>
+ <div class="sidebar-caption sidebar-project-heading"><span>YOUR PROJECTS</span><a href="#add" aria-label="Add existing app" title="Add existing app">＋</a></div><nav id="sidebar-projects" class="sidebar-projects" aria-label="Your projects"><p>No projects yet</p></nav>
+ <a class="sidebar-create button" href="#new">＋ Create app</a>
  <div class="header-end"><button id="notifications-open" class="button quiet" aria-haspopup="dialog" aria-controls="notifications-dialog">Notifications <span id="notifications-count" class="notification-count" hidden>0</span></button><span class="private"><i></i>Private workspace</span><label class="theme-control"><span class="sr-only">Appearance</span><select id="theme"><option value="light">☀ Light</option><option value="dark">☾ Dark</option><option value="system">◐ System</option></select></label></div>
-</header>
+</aside>
+<button id="sidebar-backdrop" class="sidebar-backdrop" aria-label="Close navigation" hidden></button>
+<header class="app-toolbar"><button id="sidebar-toggle" class="button quiet sidebar-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="app-sidebar">☰</button><div class="toolbar-context"><span class="toolbar-workspace">Workspace</span><span aria-hidden="true">/</span><strong id="toolbar-title">Projects</strong></div><span class="toolbar-local"><i class="dot running"></i> Local environment</span></header>
 <main id="main-content" tabindex="-1">
  <div id="locked" class="locked" hidden><div class="eyebrow">ON YOUR MACHINE</div><h1>Open your workspace</h1><p>Run <code>laraserve dashboard</code> and open the private link shown in your terminal.</p></div>
  <section id="uninstalled" class="locked" hidden><div class="eyebrow">WORKSPACE CLOSED</div><h1>LaraServe data removed</h1><p>Your managed data and startup integration have been removed. This dashboard is closing. The portable executable remains on disk; close it and delete it when ready.</p><code id="uninstalled-executable"></code></section><div id="workspace" hidden>
  <div id="notice" class="notice" role="status" hidden></div>
  <section id="projects-view" data-view="projects">
-  <div class="page-heading"><div><div class="eyebrow">YOUR DEVELOPMENT SPACE</div><h1>Projects</h1><p>Less setup. More Laravel.</p></div><div class="heading-actions"><a href="#add" class="button">▱ Add app</a><a href="#new" class="button primary">＋ Create app</a></div></div>
+  <div class="page-heading"><div><div class="eyebrow">WORKSPACE</div><h1>Projects</h1><p>Your local applications, all in one place.</p></div><div class="heading-actions"><a href="#add" class="button">▱ Add app</a><a href="#new" class="button primary">＋ Create app</a></div></div>
   <section class="monitoring" aria-label="Workspace monitoring">
    <div class="monitoring-heading"><span class="live-label"><i class="dot running"></i>Workspace pulse <span>· refreshes every 3s</span></span><button id="refresh" class="button quiet" aria-label="Refresh projects">↻ Refresh</button></div>
    <div class="metric-grid">
