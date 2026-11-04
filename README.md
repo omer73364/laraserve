@@ -72,9 +72,19 @@ laraserve serve my-app --http
 | ▶️ | `laraserve serve [path]` | Serve the current project or another app. |
 | 🆕 | `laraserve new <path>` | Create an app in a new or empty directory. |
 | 🎛️ | `laraserve versions [path]` | Show selected and available runtime versions without downloading them. |
+| ⚙️ | `laraserve settings [project]` | Inspect or save validated project settings. |
+| 📝 | `laraserve env [project]` | Compare and edit environment variables with secrets masked. |
+| 🛠️ | `laraserve artisan/composer [project] -- command` | Run a deliberate action with output and exit status. |
+| 📚 | `laraserve runtimes` | Inspect downloads and protected runtime caches. |
+| 🖥️ | `laraserve dashboard` | Open the protected local project dashboard. |
+| 🗂️ | `laraserve projects` | List registered apps and their status. |
+| ▶️ | `laraserve start [path/name/ID]` | Run a project in the background. |
+| ⏹️ | `laraserve stop [path/name/ID]` | Stop only that project’s owner. |
+| 🔄 | `laraserve restart [path/name/ID]` | Restart with saved settings, without replaying migrations. |
+| 📊 | `laraserve status [path/name/ID]` | Inspect its owner, URL, and runtimes. |
 | 📦 | `laraserve pack [path] -o app.laraserve` | Bundle an app with its dependencies and existing built assets. |
 | 🔐 | `laraserve trust` / `laraserve untrust` | Install or remove local CA trust. |
-| 🩺 | `laraserve doctor` | Inspect local setup. |
+| 🩺 | `laraserve doctor [--report FILE]` | Inspect local setup without downloads; optionally save a private support report. |
 | 🧽 | `laraserve clean [path]` | Remove recorded project state and managed project artifacts. |
 | 🗑️ | `laraserve uninstall` | Remove LaraServe-managed state and data after confirmation. |
 | 🏷️ | `laraserve version` | Print the client version. |
@@ -86,7 +96,7 @@ laraserve serve my-app --domain my-app.test
 # Work on a copy
 laraserve serve ./other-app --copy
 
-# Explicitly apply migrations (never run automatically)
+# Explicitly apply migrations to an existing project
 laraserve serve my-app --migrate
 
 # Choose a Laravel skeleton and PHP version
@@ -96,11 +106,11 @@ laraserve new my-app --version "^12.0" --php-version 8.3
 <details>
 <summary>🌱 How app creation works</summary>
 
-`new` runs `composer create-project laravel/laravel` with the selected PHP runtime. Composer installs dependencies and runs the skeleton's setup scripts. It does not run the interactive Laravel installer wizard.
+`new` supports the plain Laravel skeleton and official React, Vue, Svelte, and Livewire starter packages. Use `--starter react --database sqlite`, or run `new /absolute/path/my-app --wizard` for the actual Laravel installer prompts in a terminal (currently SQLite).
 
-Without `--version`, Composer selects a stable skeleton compatible with that PHP version. Use `--host-path` when installation needs host tools such as Git or an archive extractor.
+Initial migrations are allowed during **new project creation**. Use `--migrate=false` to opt out of the built-in flow. Existing apps still require an explicit migration action; start/restart never repeat it. External databases are not migrated by a creation default.
 
-If creation fails, partial files stay available for inspection. Choose a fresh destination to retry. Created app folders are yours; `clean` and `uninstall` do not delete the app itself.
+`--version` selects a plain skeleton constraint, and `--php-version` selects a compatible PHP runtime. Starter-kit frontend installation/builds remain a separate step. Failed creations retain partial files and data for inspection. See [project settings, actions and creation](docs/project-tools.md) for details and wizard limits.
 
 </details>
 
@@ -218,7 +228,9 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 
 | | Guide | Contents |
 |---|---|---|
+| 🗂️ | [Project lifecycle](docs/projects.md) | Background apps, saved options, ownership, and crash recovery. |
 | ⚙️ | [Runtime & configuration](docs/runtime.md) | Version selection, all serve flags, data layout, mirrors, and runtime sources. |
+| 🛠️ | [Development & restore points](docs/development.md) | Local checks, release archives, phase checkpoints, and safe source rollback. |
 | 🔧 | [Troubleshooting & limits](docs/troubleshooting.md) | Firefox trust, missing libraries, migration failures, and platform gaps. |
 
 ## 🛠️ Development
@@ -226,9 +238,16 @@ Use `--http` for the default localhost workflow without certificate or hosts set
 ```bash
 make build  # build bin/laraserve
 make test   # run the Go test suite
+make check  # run tests and static checks
 make dist   # cross-compile Linux, macOS and Windows clients
 ```
 
 Builds do not download or embed runtime executables. Local website source lives in [`website/dist/`](website/dist/).
 
-No license file is currently included in this repository.
+Licensed under the [MIT License](LICENSE). Downloaded PHP, MySQL, Caddy, and other tools retain their own licenses.
+
+Local release archives and checksums can be prepared with `make release VERSION=0.1.0-phase1.2`. This does not upload anything or run GitHub Actions. See [release and restore points](docs/development.md).
+
+Manage registered projects, inspect recent logs, and view measured Linux CPU/RAM with `laraserve dashboard`. See the [dashboard guide](docs/dashboard.md) for access details and platform limits.
+
+Project settings, masked environment editing, task output/cancellation, creation options and runtime management are available in both interfaces. See the [project tools guide](docs/project-tools.md).

@@ -3,17 +3,17 @@ package cli
 import (
 	"flag"
 	"fmt"
-	"laraserve/internal/process"
-	"net"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 
+	"laraserve/internal/appsettings"
 	"laraserve/internal/detect"
 	"laraserve/internal/hosts"
 	"laraserve/internal/pack"
 	"laraserve/internal/paths"
-	"laraserve/internal/runtime"
+	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
+	"laraserve/internal/supervisor"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
 )
@@ -90,6 +90,13 @@ func cmdUntrust(args []string) error {
 }
 
 func cmdClean(args []string) error {
+	home, homeErr := paths.New()
+	if homeErr != nil {
+		return homeErr
+	}
+	if err := projecttools.RequireNoTasks(home.Root, ""); err != nil {
+		return err
+	}
 	fs := flag.NewFlagSet("clean", flag.ContinueOnError)
 	if err := parse(fs, args); err != nil {
 		return err
@@ -103,6 +110,11 @@ func cmdClean(args []string) error {
 		target = fs.Arg(0)
 	}
 	abs, _ := filepath.Abs(target)
+	if p, err := projects.New(c.home.Root).Find(abs); err == nil {
+		if err := requireStopped(c.home.Root, p.ID); err != nil {
+			return err
+		}
+	}
 	found := false
 	for id, p := range c.man.Projects {
 		ws := filepath.Join(c.home.Workspaces(), paths.ProjectID(abs))
@@ -121,6 +133,16 @@ func (c *ctx) cleanProject(id string) {
 	p := c.man.Projects[id]
 	if p == nil {
 		return
+	}
+	if records, err := projects.New(c.home.Root).List(); err == nil {
+		canonical, _ := projects.Canonical(p.Path)
+		for _, record := range records {
+			root, _ := projects.Canonical(record.Root)
+			if canonical != "" && root == canonical {
+				_ = os.Remove(filepath.Join(c.home.Root, "execution", record.ID+".json"))
+				_ = os.Remove(projects.New(c.home.Root).File(record.ID))
+			}
+		}
 	}
 	if p.Vendor && !p.Workspace {
 		_ = os.RemoveAll(filepath.Join(p.Path, "vendor"))
@@ -156,6 +178,13 @@ func (c *ctx) cleanProject(id string) {
 }
 
 func cmdUninstall(args []string) error {
+	home, homeErr := paths.New()
+	if homeErr != nil {
+		return homeErr
+	}
+	if err := projecttools.RequireNoTasks(home.Root, ""); err != nil {
+		return err
+	}
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	yes := yesFlags(fs)
 	if err := parse(fs, args); err != nil {
@@ -165,6 +194,24 @@ func cmdUninstall(args []string) error {
 	c, err := load()
 	if err != nil {
 		return err
+	}
+	owners, err := supervisor.States(c.home.Root)
+	if err != nil {
+		return err
+	}
+	for _, state := range owners {
+		if err := requireStopped(c.home.Root, state.ID); err != nil {
+			return err
+		}
+	}
+	registered, err := projects.New(c.home.Root).List()
+	if err != nil {
+		return err
+	}
+	for _, p := range registered {
+		if err := requireStopped(c.home.Root, p.ID); err != nil {
+			return err
+		}
 	}
 	if !ui.Confirm(fmt.Sprintf("Remove everything laraserve created (including %s)?", c.home.Root)) {
 		return nil
@@ -184,6 +231,10 @@ func cmdUninstall(args []string) error {
 			ui.OK("Local CA removed from the system trust store")
 		}
 	}
+	exe, _ := os.Executable()
+	if err := appsettings.SetLogin(c.home.Root, exe, false); err != nil {
+		return fmt.Errorf("remove login startup: %w", err)
+	}
 	if err := os.RemoveAll(c.home.Root); err != nil {
 		return err
 	}
@@ -191,57 +242,14 @@ func cmdUninstall(args []string) error {
 	return nil
 }
 
-func cmdDoctor() error {
-	c, err := load()
+func requireStopped(home, id string) error {
+	state, err := supervisor.Status(home, id)
 	if err != nil {
 		return err
 	}
-	ui.Fields("Environment",
-		ui.Field{Label: "Platform", Value: goruntime.GOOS + "/" + goruntime.GOARCH},
-		ui.Field{Label: "Home", Value: c.home.Root},
-		ui.Field{Label: "Projects", Value: fmt.Sprint(len(c.man.Projects))},
-	)
-	ui.Section("Health checks")
-	if rt, err := runtime.Ensure(c.home.Runtimes()); err != nil {
-		ui.Warn("runtime: %v", err)
-	} else {
-		ui.OK("runtime: %s", rt.PHP)
-		if out, err := process.PHP(rt.PHP, "-v").Output(); err == nil {
-			ui.Info("%s", firstLine(string(out)))
-		}
-	}
-	if c.man.CA != nil {
-		ui.OK("local CA installed in the OS trust store (sha256 %s…)", c.man.CA.SHA256[:12])
-	} else {
-		ui.Warn("local CA is not installed (run `laraserve trust`)")
-	}
-	if len(c.man.Hosts) > 0 {
-		ui.OK("hosts entries (%s): %v", hosts.Path(), c.man.Hosts)
-	}
-	ui.Section("Local ports")
-	for _, p := range []string{"8443", "8080", "443"} {
-		if l, err := net.Listen("tcp", "127.0.0.1:"+p); err != nil {
-			ui.Info("port %s: not available (%v)", p, shortErr(err))
-		} else {
-			l.Close()
-			ui.Info("port %s: free", p)
-		}
+	switch state.Status {
+	case "starting", "running", "stopping", "unresponsive":
+		return fmt.Errorf("stop project %s before removing its files", id)
 	}
 	return nil
-}
-
-func firstLine(s string) string {
-	for i, r := range s {
-		if r == '\n' {
-			return s[:i]
-		}
-	}
-	return s
-}
-
-func shortErr(err error) string {
-	if oe, ok := err.(*net.OpError); ok && oe.Err != nil {
-		return oe.Err.Error()
-	}
-	return err.Error()
 }

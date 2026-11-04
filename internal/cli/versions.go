@@ -7,7 +7,8 @@ import (
 	"strings"
 
 	"laraserve/internal/detect"
-	"laraserve/internal/paths"
+	"laraserve/internal/projectconfig"
+	"laraserve/internal/projects"
 	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 	"laraserve/internal/versions"
@@ -33,7 +34,15 @@ func cmdVersions(args []string) error {
 	if err != nil {
 		return err
 	}
-	locked, err := versions.ReadLock(filepath.Join(c.home.Projects(), paths.ProjectID(root), "runtime-versions.json"))
+	root, err = projects.Canonical(root)
+	if err != nil {
+		return err
+	}
+	id, err := projectStateID(c.man, root, false)
+	if err != nil {
+		return err
+	}
+	locked, err := versions.ReadLock(filepath.Join(c.home.Projects(), id, "runtime-versions.json"))
 	if err != nil {
 		return err
 	}
@@ -43,7 +52,11 @@ func cmdVersions(args []string) error {
 	}
 	fields := []ui.Field{{Label: "Project", Value: root}, {Label: "PHP", Value: php}}
 	conn := detect.DatabaseConnection(root)
-	if conn == "mysql" || conn == "mariadb" {
+	doc, err := projectconfig.Read(root)
+	if err != nil {
+		return err
+	}
+	if doc.Config.Database == "managed" || doc.Config.Database != "external" && doc.Config.Database != "sqlite" && (conn == "mysql" || conn == "mariadb") {
 		mysql, err := versions.ProjectMySQL(root, runtime.MySQLVersions(), "", locked.MySQL)
 		if err != nil {
 			return err

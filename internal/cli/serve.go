@@ -17,17 +17,26 @@ import (
 	"syscall"
 	"time"
 
+	"laraserve/internal/activity"
 	"laraserve/internal/certs"
 	"laraserve/internal/detect"
+	"laraserve/internal/elevate"
 	"laraserve/internal/env"
+	"laraserve/internal/filelock"
+	"laraserve/internal/frontend"
 	"laraserve/internal/hosts"
 	"laraserve/internal/mysql"
 	"laraserve/internal/pack"
 	"laraserve/internal/paths"
 	"laraserve/internal/phpmyadmin"
 	"laraserve/internal/prepare"
+	"laraserve/internal/projectconfig"
+	"laraserve/internal/projects"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/serve"
+	"laraserve/internal/statefile"
+	"laraserve/internal/supervisor"
 	"laraserve/internal/trust"
 	"laraserve/internal/ui"
 	"laraserve/internal/versions"
@@ -36,38 +45,20 @@ import (
 var domainRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$`)
 
 func cmdServe(args []string) error {
-	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	domainF := fs.String("domain", "", "")
-	portF := fs.Int("port", 0, "")
-	host := fs.String("host", "127.0.0.1", "")
-	httpF := fs.Bool("http", false, "")
-	allow := fs.String("allow-domain", "", "")
-	noTrust := fs.Bool("no-trust", false, "")
-	noHosts := fs.Bool("no-hosts", false, "")
-	copyF := fs.Bool("copy", false, "")
-	sandbox := fs.Bool("sandbox", false, "")
-	migrate := fs.Bool("migrate", false, "")
-	mysqlF := fs.Bool("mysql", false, "")
-	allowInsecure := fs.Bool("allow-insecure-dependencies", false, "allow Composer dependencies with known security advisories for legacy projects")
-	phpVersionF := fs.String("php-version", "", "")
-	mysqlVersionF := fs.String("mysql-version", "", "")
-	adminF := fs.Bool("phpmyadmin", true, "")
-	hostPath := fs.Bool("host-path", false, "")
-	verbose := fs.Bool("verbose", false, "")
-	yes := yesFlags(fs)
+	options := newServeOptions()
+	fs := options.fs
+	yes := options.yes
 	if err := parse(fs, args); err != nil {
 		return err
 	}
 	ui.Yes = *yes
-	if *sandbox {
+	if *options.sandbox {
 		return errors.New("--sandbox is not implemented yet (planned: Landlock on Linux, sandbox-exec on macOS)")
 	}
 
-	c, err := load()
-	if err != nil {
-		return err
+	if fs.NArg() > 1 {
+		return fmt.Errorf("usage: laraserve serve [path] [flags]")
 	}
-	https := !*httpF
 
 	// ---- 1. locate the project (directory, bundle, or copy) ----
 	target := "."
@@ -78,22 +69,200 @@ func cmdServe(args []string) error {
 	if err != nil {
 		return err
 	}
+	canonical, err := projects.Canonical(abs)
+	if err != nil {
+		return err
+	}
+	abs = canonical
+	h, err := paths.New()
+	if err != nil {
+		return err
+	}
+	registryID := paths.ProjectID(canonical)
+	lifetime, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	if err := process.InitOwnership(); err != nil {
+		return fmt.Errorf("cannot establish child-process ownership: %w", err)
+	}
+	session, err := supervisor.Begin(lifetime, h.Root, registryID, os.Getenv("LARASERVE_START_ID"))
+	if err != nil {
+		return err
+	}
+	activity.SetFile(filepath.Join(h.Root, "control", registryID+"-progress.json"))
+	activity.Plan("Inspect project", "Prepare environment", "Prepare PHP", "Install PHP dependencies", "Configure domain and port", "Configure HTTPS", "Prepare database", "Prepare frontend", "Start services")
+	activity.Start("Inspect project")
+	var runErr error
+	defer func() { session.Close(runErr) }()
+	store, err := projectStore(h)
+	if err != nil {
+		runErr = err
+		return err
+	}
+	planned := &projects.Project{ID: registryID, Name: strings.TrimSuffix(filepath.Base(canonical), ".laraserve"), Source: canonical, Root: canonical, Args: rememberServeArgs(fs, canonical), HTTPS: !*options.httpF, Domain: *options.domainF, Port: *options.portF}
+	if err = store.Import(planned); err != nil {
+		runErr = err
+		return err
+	}
+
+	return runRegisteredServe(options, h, session, canonical, &runErr)
+}
+
+func runRegisteredServe(options *serveOptions, h *paths.Home, session *supervisor.Session, abs string, runErr *error) (result error) {
+	defer func() {
+		if session.Context().Err() != nil {
+			result = nil
+		}
+		activity.Finish(result)
+		*runErr = result
+	}()
+	fs := options.fs
+	domainF := options.domainF
+	portF := options.portF
+	host := options.host
+	httpF := options.httpF
+	allow := options.allow
+	noTrust := options.noTrust
+	noHosts := options.noHosts
+	copyF := options.copyF
+	migrate := options.migrate
+	mysqlF := options.mysqlF
+	allowInsecure := options.allowInsecure
+	phpVersionF := options.phpVersionF
+	mysqlVersionF := options.mysqlVersionF
+	adminF := options.adminF
+	hostPath := options.hostPath
+	verbose := options.verbose
+
+	https := !*httpF
+	registryID := paths.ProjectID(abs)
+	restoreDownloads := runtime.UseDownloadContext(session.Context())
+	defer restoreDownloads()
+	// Serialize footprint/CA preparation, but release before serving. Running
+	// projects remain independent and cache installation also has its own locks.
+	preparation, err := filelock.Acquire(session.Context(), filepath.Join(h.Root, "startup.lock"))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if preparation != nil {
+			preparation()
+		}
+	}()
+	if err := projecttools.RequireNoTasks(h.Root, registryID); err != nil {
+		return err
+	}
+	c, err := load()
+	if err != nil {
+		return err
+	}
+	c.autoSetup = *options.setupLocal
+	registry := projects.New(h.Root)
+	previous, err := registry.Load(registryID)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if previous != nil && previous.Source != abs {
+		return fmt.Errorf("project ID collision; preserve the existing registry record")
+	}
+	explicit := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	if previous != nil {
+		if !explicit["domain"] {
+			*domainF = previous.Domain
+		}
+		if !explicit["port"] {
+			if previous.RequestedPort != nil {
+				*portF = *previous.RequestedPort
+			} else {
+				*portF = previous.Port
+			}
+		}
+		if !explicit["http"] {
+			*httpF = !previous.HTTPS
+			https = previous.HTTPS
+		}
+	}
 	root, isWorkspace, err := resolveRoot(c, abs, *copyF)
 	if err != nil {
 		return err
 	}
 
+	activity.Start("Prepare environment")
+	if err := prepare.EnsureEnvironment(root); err != nil {
+		return err
+	}
+	configDoc, err := projectconfig.Read(root)
+	if err != nil {
+		return err
+	}
+	actual := explicit
+	if os.Getenv("LARASERVE_SETTINGS_REPLAY") == "1" {
+		actual = map[string]bool{}
+		for _, name := range strings.Split(os.Getenv("LARASERVE_EXPLICIT_FLAGS"), ",") {
+			if name != "" {
+				actual[name] = true
+			}
+		}
+	}
+	defaults := configDoc.Config
+	automaticServices(root, &defaults)
+	if (defaults.Services.AutoDetect == nil || *defaults.Services.AutoDetect) && frontend.NeedsVite(root) {
+		defaults.Services.Vite = true
+	}
+	if !actual["domain"] && defaults.Domain != "" {
+		*domainF = defaults.Domain
+	}
+	if !actual["http"] && defaults.HTTPS != nil {
+		*httpF = !*defaults.HTTPS
+	}
+	if !actual["port"] && defaults.Port != nil {
+		*portF = *defaults.Port
+	}
+	if !actual["php-version"] && defaults.PHP != "" {
+		*phpVersionF = defaults.PHP
+	}
+	if !actual["mysql-version"] && defaults.MySQL != "" {
+		*mysqlVersionF = defaults.MySQL
+	}
+	if !actual["phpmyadmin"] && defaults.PHPMyAdmin != nil {
+		*adminF = *defaults.PHPMyAdmin
+	}
+	https = !*httpF
 	// ---- 2. detect ----
 	proj, err := detect.Inspect(root)
 	if err != nil {
+		return err
+	}
+	record := &projects.Project{ID: registryID, Name: strings.TrimSuffix(filepath.Base(abs), ".laraserve"), Source: abs, Root: root, HTTPS: https}
+	if previous != nil {
+		record.Domain = previous.Domain
+		record.Port = previous.Port
+	}
+	requestedPort := *portF
+	record.RequestedPort = &requestedPort
+	record.Args = rememberServeArgs(fs, abs)
+	if err := registry.Save(record); err != nil {
 		return err
 	}
 	ui.Section("Preparing application")
 	ui.OK("Detected Laravel %s (PHP %s)", orDash(proj.Laravel), orDash(proj.PHPConstraint))
 	connection := detect.DatabaseConnection(root)
 	useMySQL := managedMySQL(fs, *mysqlF, connection)
+	if !actual["mysql"] {
+		switch defaults.Database {
+		case "managed":
+			useMySQL = true
+		case "external", "sqlite":
+			useMySQL = false
+		case "auto":
+			useMySQL = connection == "mysql" || connection == "mariadb"
+		}
+	}
 
-	id := paths.ProjectID(root)
+	id, err := projectStateID(c.man, root, isWorkspace)
+	if err != nil {
+		return err
+	}
 	stateDir := filepath.Join(c.home.Projects(), id)
 	versionPath := filepath.Join(stateDir, "runtime-versions.json")
 	locked, err := versions.ReadLock(versionPath)
@@ -111,20 +280,26 @@ func cmdServe(args []string) error {
 			return err
 		}
 	}
+	activity.Start("Prepare PHP")
 	// ---- 3. select and download the project's PHP runtime ----
 	rt, err := runtime.EnsurePHP(c.home.Runtimes(), selectedPHP)
 	if err != nil {
+		return err
+	}
+	if err = projecttools.ConfigurePHP(rt, stateDir, defaults); err != nil {
 		return err
 	}
 	ui.OK("PHP %s ready", selectedPHP)
 	// ---- 4. per-project state ----
 	mp := c.man.Project(id, root)
 	mp.Workspace = isWorkspace
+	mp.Path = root
 	st, err := prepare.EnsureState(stateDir)
 	if err != nil {
 		return err
 	}
 
+	activity.Start("Install PHP dependencies")
 	// ---- 5. dependencies ----
 	if !proj.HasVendor {
 		if err := runtime.EnsureComposer(rt); err != nil {
@@ -135,13 +310,14 @@ func cmdServe(args []string) error {
 		}
 		ui.Info("vendor/ is missing: running composer install (needs network or a Composer cache)")
 		baseEnv := env.Build(rt, st.Dir, *hostPath, nil)
-		if err := prepare.ComposerInstall(rt.PHP, rt.Composer, root, baseEnv, *allowInsecure); err != nil {
+		if err := prepare.ComposerInstallContext(session.Context(), rt.PHP, rt.Composer, root, baseEnv, *allowInsecure); err != nil {
 			return fmt.Errorf("composer install failed: %w\n  Tip: run `laraserve pack` on an online machine and serve the bundle", err)
 		}
 		mp.Vendor = true
 	}
 	ui.OK("Dependencies ready")
 
+	activity.Start("Configure domain and port")
 	// ---- 6. domain ----
 	domain := strings.ToLower(strings.TrimSpace(*domainF))
 	if domain == "" {
@@ -157,7 +333,20 @@ func cmdServe(args []string) error {
 			domain, strings.Join(certs.DefaultPermitted, ", "), domain)
 	}
 	if !hosts.IsLoopbackName(domain) && !hosts.Resolves(domain) {
-		domain = c.ensureHosts(domain, *noHosts)
+		if c.autoSetup && *noHosts {
+			return fmt.Errorf("The requested domain %s does not resolve locally, and --no-hosts disables automatic setup. Use a .localhost domain or remove that opt-out before starting", domain)
+		}
+		if c.autoSetup && !*noHosts {
+			if err := hosts.Add(domain); err != nil {
+				return fmt.Errorf("cannot configure requested domain %s: %w; add %s to %s or choose a .localhost domain", domain, err, hosts.Line(domain), hosts.Path())
+			}
+			c.man.AddHost(domain)
+			if err := c.man.Save(); err != nil {
+				return err
+			}
+		} else {
+			domain = c.ensureHosts(domain, *noHosts)
+		}
 	}
 	c.man.AddDomain(mp, domain)
 
@@ -166,11 +355,12 @@ func cmdServe(args []string) error {
 	if rt.ServerPHP != "" {
 		serverRuntime.PHP = rt.ServerPHP
 	}
-	port, err := choosePort(&serverRuntime, *host, *portF, https, *domainF != "")
+	port, err := choosePort(&serverRuntime, *host, *portF, https, *domainF != "", c.autoSetup)
 	if err != nil {
 		return err
 	}
 
+	activity.Start("Configure HTTPS")
 	// ---- 8. TLS ----
 	lan := *host == "0.0.0.0"
 	var certPath, keyPath string
@@ -188,15 +378,26 @@ func cmdServe(args []string) error {
 			return err
 		}
 		ui.OK("Certificate ready for %s", domain)
+	} else {
+		activity.Skip("Configure HTTPS", "HTTP selected")
 	}
 
 	cfg := serve.Config{
 		PHP: serverRuntime.PHP, NativePHP: rt.NativeCLI, Root: root, StateDir: st.Dir, Domain: domain, Host: *host,
-		Port: port, HTTPS: https, Cert: certPath, Key: keyPath, LAN: lan, Verbose: *verbose,
+		Port: port, HTTPS: https, Cert: certPath, Key: keyPath, LAN: lan, Verbose: *verbose, Context: session.Context(),
 	}
 
+	activity.Start("Prepare database")
 	// ---- 9. app environment (nothing written into the project) ----
 	cfg.AppEnv = st.AppEnv(root, cfg.URL())
+	if !actual["mysql"] && defaults.Database == "external" {
+		delete(cfg.AppEnv, "DB_CONNECTION")
+		delete(cfg.AppEnv, "DB_DATABASE")
+	}
+	if !actual["mysql"] && defaults.Database == "sqlite" {
+		cfg.AppEnv["DB_CONNECTION"] = "sqlite"
+		cfg.AppEnv["DB_DATABASE"] = st.SQLite
+	}
 	var db *mysql.Server
 	var dbLifetime context.Context
 	if useMySQL {
@@ -212,7 +413,7 @@ func cmdServe(args []string) error {
 		if err := check.Run(); err != nil {
 			return fmt.Errorf("private MySQL requires pdo_mysql in the PHP runtime: %w", err)
 		}
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		ctx, stop := signal.NotifyContext(session.Context(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		dbLifetime = ctx
 		ctx, cancel := context.WithCancel(ctx)
@@ -235,7 +436,25 @@ func cmdServe(args []string) error {
 		}
 		ui.OK("MySQL %s ready (database: %s)", selectedMySQL, db.Env["DB_DATABASE"])
 	}
+	development, err := prepareDevelopment(c.home.Runtimes(), defaults, &cfg, rt)
+	if err != nil {
+		return err
+	}
+	defer development.Close()
 	cfg.Env = env.Build(rt, st.Dir, *hostPath, cfg.AppEnv)
+	development.env = cfg.Env
+	ownerState, snapshotErr := supervisor.Status(c.home.Root, registryID)
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	development.status.Generation = ownerState.Generation
+	development.statusFile = filepath.Join(st.Dir, "services.json")
+	if err := statefile.WriteJSON(development.statusFile, development.status); err != nil {
+		return err
+	}
+	if snapshotErr = projecttools.SaveExecution(c.home.Root, registryID, projecttools.Execution{Generation: ownerState.Generation, Root: root, StateDir: st.Dir, Runtime: *rt, Env: cfg.Env}); snapshotErr != nil {
+		return snapshotErr
+	}
 	if db != nil && *migrate {
 		mysqlState := &prepare.State{Dir: db.Dir}
 		ui.Info("Applying MySQL migrations")
@@ -280,7 +499,7 @@ func cmdServe(args []string) error {
 				return err
 			}
 		}
-		adminURL := (serve.Config{Domain: "localhost", Port: adminPort, HTTPS: https}).URL()
+		adminURL := (serve.Config{Domain: "127.0.0.1", Port: adminPort, HTTPS: https}).URL()
 		admin, err = phpmyadmin.Prepare(source, st.Dir, adminURL, db.Env)
 		if err != nil {
 			return err
@@ -298,12 +517,54 @@ func cmdServe(args []string) error {
 		return err
 	}
 
+	record.Domain = domain
+	record.Port = port
+	record.HTTPS = https
+	record.PHP = selectedPHP
+	if db != nil {
+		record.MySQL = selectedMySQL
+		record.Database = "Managed MySQL " + selectedMySQL
+	} else {
+		record.MySQL = ""
+		record.Database = "External " + connection
+		if cfg.AppEnv["DB_CONNECTION"] == "sqlite" {
+			record.Database = "SQLite"
+		}
+	}
+	if err := registry.Save(record); err != nil {
+		return err
+	}
+	if err := session.Context().Err(); err != nil {
+		return err
+	}
 	// ---- 10. serve ----
-	err = serve.Run(cfg, func() {
+	services := append(development.services, supervisor.ServiceFunc{Label: "application", Execute: func(ctx context.Context, ready func()) error {
+		application := cfg
+		lifetime, cancel := context.WithCancel(ctx)
+		defer cancel()
+		stop := context.AfterFunc(cfg.Context, cancel)
+		defer stop()
+		application.Context = lifetime
+		return serve.Run(application, ready)
+	}})
+	activity.Start("Start services")
+	err = supervisor.RunServices(cfg.Context, services, func() {
+		activity.Finish(nil)
+		if admin != nil {
+			_ = session.SetAdminURL(admin.LoginURL)
+		}
+		if err := session.Ready(cfg.URL()); err != nil {
+			ui.Warn("Could not record project readiness: %v", err)
+		}
+		preparation()
+		preparation = nil
 		database := "External (" + connection + ")"
 		data := ""
 		if db != nil {
 			database = "MySQL " + selectedMySQL + " · private socket"
+			if goruntime.GOOS == "windows" {
+				database = "MySQL " + selectedMySQL + " · private loopback"
+			}
 			data = db.Dir
 		} else if connection == "sqlite" || connection == "" {
 			database = "SQLite"
@@ -316,6 +577,7 @@ func cmdServe(args []string) error {
 			{Label: "PHP", Value: selectedPHP},
 			{Label: "Database", Value: database},
 		}
+		fields = append(fields, development.fields...)
 		if data != "" {
 			fields = append(fields, ui.Field{Label: "Database data", Value: data})
 		}
@@ -421,20 +683,26 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 	if regen {
 		ui.Info("Local CA regenerated to include: %s", strings.Join(ca.Permitted, ", "))
 	}
+	if noTrust {
+		ui.Warn("CA trust setup skipped (--no-trust): browsers may show a certificate warning")
+		return ca, c.man.Save()
+	}
 	if c.man.CA != nil && c.man.CA.SHA256 != ca.SHA256 {
 		if err := trust.Remove(c.man.CA); err != nil {
-			ui.Warn("could not remove the previous CA from the trust store: %v", err)
+			return nil, fmt.Errorf("cannot replace the previous CA trust entry: %w; retry with access to the trust store, or use --http", err)
 		}
 		c.man.CA = nil
 	}
+	wasApproved := c.man.CA != nil
 	if c.man.CA == nil || reinstall {
 		switch {
-		case noTrust:
-			ui.Warn("CA not installed (--no-trust): browsers will show a certificate warning")
-		case ui.Confirm("Install laraserve's local CA in the system trust store? (name-constrained to " +
-			strings.Join(ca.Permitted, ", ") + "; removable with `laraserve untrust`)"):
+		case c.autoSetup || ui.Confirm("Install laraserve's local CA in the system trust store? (name-constrained to "+
+			strings.Join(ca.Permitted, ", ")+"; removable with `laraserve untrust`)"):
 			entry, err := trust.Install(ca)
 			if err != nil {
+				if c.autoSetup {
+					return nil, fmt.Errorf("HTTPS trust setup failed: %w; run laraserve trust from a terminal with permission to update the trust store", err)
+				}
 				ui.Warn("CA install failed: %v (browsers will show a warning)", err)
 			} else {
 				// Retain previously modified profiles so untrust can reverse them
@@ -458,12 +726,35 @@ func (c *ctx) ensureTrust(allow []string, noTrust, reinstall bool) (*certs.CA, e
 			ui.Warn("CA not installed: browsers will show a certificate warning")
 		}
 	}
+	if wasApproved && !reinstall && c.man.CA != nil {
+		trust.Repair(ca, c.man.CA)
+	}
 	return ca, c.man.Save()
 }
 
-func choosePort(rt *runtime.Runtime, host string, explicit int, https, hasDomain bool) (int, error) {
+func choosePort(rt *runtime.Runtime, host string, explicit int, https, hasDomain bool, automatic ...bool) (int, error) {
 	if explicit != 0 {
-		return serve.FreePort(host, explicit, true)
+		selected, err := serve.FreePort(host, explicit, true)
+		if goruntime.GOOS == "linux" && explicit < 1024 && (errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)) {
+			if linuxLowPortAllowed(rt.PHP) {
+				return explicit, nil
+			}
+			if len(automatic) > 0 && automatic[0] {
+				cmd, e := elevate.Command("setcap", "cap_net_bind_service=+ep", rt.PHP)
+				if e != nil {
+					return 0, e
+				}
+				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+				if e = cmd.Run(); e != nil {
+					return 0, fmt.Errorf("permission to use port %d was denied: %w", explicit, e)
+				}
+				return explicit, nil
+			}
+		}
+		if errors.Is(err, syscall.EADDRINUSE) {
+			return 0, fmt.Errorf("Port %d is already in use. Choose another port, or leave Port empty to choose automatically.\n%w", explicit, err)
+		}
+		return selected, err
 	}
 	if https && hasDomain && privilegedPortOK(rt, host) {
 		return 443, nil

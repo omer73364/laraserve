@@ -2,13 +2,17 @@
 package cli
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"laraserve/internal/filelock"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"laraserve/internal/manifest"
 	"laraserve/internal/paths"
+	"laraserve/internal/projecttools"
 	"laraserve/internal/runtime"
 	"laraserve/internal/ui"
 )
@@ -16,14 +20,26 @@ import (
 const usage = `laraserve %s - serve any Laravel app over HTTPS, with no PHP/Composer installed
 
 Usage:
-  laraserve new <path> [--version CONSTRAINT] [--php-version V] [--host-path]
+  laraserve new <path> [--wizard | --starter KIT] [--database TYPE] [--migrate=false]
   laraserve serve [path|bundle.laraserve] [flags]
+  laraserve settings [project] [--file config.json]
+  laraserve env [project] [--file changes.json]
+  laraserve artisan|composer [project] [--confirm-schema] -- command [args]
+  laraserve task ID [--wait | --cancel]
+  laraserve node|npm [path] -- command [args]   use project-selected Node
+  laraserve runtimes [list | install php|mysql VERSION | remove KEY --confirm]
+  laraserve dashboard [--port N]  open the protected local management UI
+  laraserve projects           list registered projects and their status
+  laraserve start [path|name|ID] [serve flags]   start in the background
+  laraserve stop [path|name|ID]                 stop its current owner
+  laraserve restart [path|name|ID] [serve flags]
+  laraserve status [path|name|ID]
   laraserve pack  [path] [-o app.laraserve] [--include-env]
   laraserve trust | untrust      install / remove the local CA in the OS trust store
   laraserve clean [path]         remove vendor/ (if laraserve made it), state, hosts entries
   laraserve uninstall            remove everything laraserve ever created
   laraserve versions [path]      show selected and available runtime versions
-  laraserve doctor | version
+  laraserve doctor [--report FILE] | version
 
 serve flags:
   --domain NAME      serve on NAME (e.g. testapp.test); default localhost
@@ -57,12 +73,71 @@ func Run(args []string) int {
 	}
 	var err error
 	switch args[0] {
+	case "trust", "untrust", "clean", "uninstall":
+		home, e := paths.New()
+		if e != nil {
+			ui.Err("%v", e)
+			return 1
+		}
+		if args[0] == "uninstall" {
+			auto, e := filelock.Acquire(context.Background(), filepath.Join(home.Root, "auto-launch.lock"))
+			if e != nil {
+				ui.Err("%v", e)
+				return 1
+			}
+			defer auto()
+		}
+		release, e := filelock.Acquire(context.Background(), filepath.Join(home.Root, "startup.lock"))
+		if e != nil {
+			ui.Err("%v", e)
+			return 1
+		}
+		defer release()
+	}
+	switch args[0] {
+	case "__autostart":
+		err = cmdAutostart(args[1:])
+	case "__project-task":
+		if len(args) != 2 {
+			err = fmt.Errorf("invalid task invocation")
+		} else {
+			home, e := paths.New()
+			if e != nil {
+				err = e
+			} else {
+				err = projecttools.RunTaskWorker(home.Root, args[1])
+			}
+		}
+	case "node", "npm":
+		err = cmdNode(args[1:], args[0] == "npm")
+	case "task":
+		err = cmdTask(args[1:])
+	case "settings":
+		err = cmdSettings(args[1:])
+	case "env":
+		err = cmdEnvironment(args[1:])
+	case "artisan", "composer":
+		err = cmdProjectTask(args[1:], args[0])
+	case "runtimes":
+		err = cmdRuntimes(args[1:])
+	case "dashboard":
+		err = cmdDashboard(args[1:])
 	case "new":
 		err = cmdNew(args[1:])
 	case "versions":
 		err = cmdVersions(args[1:])
-	case "serve":
+	case "serve", "__background-serve":
 		err = cmdServe(args[1:])
+	case "projects", "list":
+		err = cmdProjects(args[1:])
+	case "start":
+		err = cmdStart(args[1:], false)
+	case "restart":
+		err = cmdStart(args[1:], true)
+	case "stop":
+		err = cmdStop(args[1:])
+	case "status":
+		err = cmdStatus(args[1:])
 	case "pack":
 		err = cmdPack(args[1:])
 	case "trust":
@@ -74,7 +149,7 @@ func Run(args []string) int {
 	case "uninstall":
 		err = cmdUninstall(args[1:])
 	case "doctor":
-		err = cmdDoctor()
+		err = cmdDoctor(args[1:]...)
 	case "version", "--version", "-v":
 		fmt.Println("laraserve", runtime.Version)
 	case "help", "--help", "-h":
@@ -139,8 +214,9 @@ func yesFlags(fs *flag.FlagSet) *bool {
 }
 
 type ctx struct {
-	home *paths.Home
-	man  *manifest.Manifest
+	autoSetup bool
+	home      *paths.Home
+	man       *manifest.Manifest
 }
 
 func load() (*ctx, error) {

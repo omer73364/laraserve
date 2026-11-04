@@ -35,3 +35,20 @@ func TestConcurrentCachePublishesOnce(t *testing.T) {
 		t.Fatalf("concurrent downloads populated %d times", populated.Load())
 	}
 }
+
+func TestBrokenReadyCacheIsRepairedWithoutTouchingDatabaseData(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "tool")
+	os.MkdirAll(dir, 0700)
+	os.WriteFile(filepath.Join(dir, ".ready"), []byte("ready"), 0600)
+	data := filepath.Join(root, "persistent-database")
+	os.WriteFile(data, []byte("keep my data"), 0600)
+	_, err := installCache(root, "tool", func(d string) error { _, err := os.Stat(filepath.Join(d, "binary")); return err }, func(d string) error { return os.WriteFile(filepath.Join(d, "binary"), []byte("repaired"), 0700) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(data)
+	if err != nil || string(b) != "keep my data" {
+		t.Fatal("repair touched database state", err)
+	}
+}

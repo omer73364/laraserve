@@ -12,9 +12,11 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"laraserve/internal/detect"
+	"laraserve/internal/projectconfig"
 )
 
 type Pins struct {
+	Node  string `json:"node,omitempty"`
 	PHP   string `json:"php,omitempty"`
 	MySQL string `json:"mysql,omitempty"`
 }
@@ -316,19 +318,8 @@ func ProjectMySQL(root string, available []string, override, locked string) (str
 	return v, nil
 }
 func projectPins(root string) (Pins, error) {
-	var p Pins
-	b, err := os.ReadFile(filepath.Join(root, ".laraserve.json"))
-	if os.IsNotExist(err) {
-		return p, nil
-	}
-	if err != nil {
-		return p, err
-	}
-	err = json.Unmarshal(b, &p)
-	if err != nil {
-		return p, fmt.Errorf(".laraserve.json: %w", err)
-	}
-	return p, nil
+	doc, err := projectconfig.Read(root)
+	return Pins{PHP: doc.Config.PHP, MySQL: doc.Config.MySQL}, err
 }
 func readVersion(root, name string) string {
 	b, _ := os.ReadFile(filepath.Join(root, name))

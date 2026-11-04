@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"laraserve/internal/activity"
 	"laraserve/internal/process"
 	"os"
 	"os/exec"
@@ -99,7 +100,7 @@ func artisanContext(ctx context.Context, php, root string, env []string, args ..
 	cmd := process.PHPContext(ctx, php, full...)
 	cmd.Dir, cmd.Env = root, env
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	return process.RunOwned(cmd)
 }
 
 // EnsureMigrations runs only when explicitly requested. Fresh databases and
@@ -122,9 +123,12 @@ func (s *State) EnsureMigrationsContext(ctx context.Context, php, root string, e
 
 // ComposerInstall runs `composer install` (needs network unless cached).
 func ComposerInstall(php, composerPhar, root string, env []string, allowInsecure ...bool) error {
+	return ComposerInstallContext(context.Background(), php, composerPhar, root, env, allowInsecure...)
+}
+func ComposerInstallContext(ctx context.Context, php, composerPhar, root string, env []string, allowInsecure ...bool) error {
 	env = composerPolicyEnv(env, allowInsecure)
-	cmd := process.PHP(php, composerPhar, "install",
-		"--no-interaction", "--prefer-dist", "--no-progress")
+	cmd := process.PHPContext(ctx, php, composerPhar, "install",
+		"--no-interaction", "--prefer-dist", "--no-progress", "--no-scripts", "--no-plugins")
 	cmd.Dir = root
 	return runComposer(cmd, php, env)
 }
@@ -136,8 +140,9 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 	if runtime.GOOS == "windows" {
 		cmd.Env = append([]string{}, env...)
 		cmd.Env = append(cmd.Env, "PHP_BINARY="+php)
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		return cmd.Run()
+		output := &activity.Output{Destination: os.Stdout}
+		cmd.Stdout, cmd.Stderr = output, output
+		return output.Error(process.RunOwned(cmd))
 	}
 	php, err := filepath.Abs(php)
 	if err != nil {
@@ -174,8 +179,9 @@ func runComposer(cmd *exec.Cmd, php string, env []string) error {
 		cmd.Env = append(cmd.Env, entry)
 	}
 	cmd.Env = append(cmd.Env, "PHP_BINARY="+launcher, "PATH="+dir+string(os.PathListSeparator)+path)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	output := &activity.Output{Destination: os.Stdout}
+	cmd.Stdout, cmd.Stderr = output, output
+	return output.Error(process.RunOwned(cmd))
 }
 
 // ComposerCreateProject scaffolds an app using the cached PHP and Composer.
@@ -230,4 +236,84 @@ func composerPolicyEnv(env []string, allow []bool) []string {
 		}
 	}
 	return append(out, "COMPOSER_POLICY_ADVISORIES_BLOCK=0")
+}
+
+// ComposerTask runs an explicit action using the same PHP launcher as install.
+func ComposerTask(ctx context.Context, php, root string, env []string, args []string) error {
+	cmd := process.PHPContext(ctx, php, args...)
+	cmd.Dir = root
+	return runComposer(cmd, php, env)
+}
+
+// ArtisanContext runs a deliberate command with a cancellable owned lifetime.
+func ArtisanContext(ctx context.Context, php, root string, environment []string, args ...string) error {
+	return artisanContext(ctx, php, root, environment, args...)
+}
+func ComposerCreatePackage(ctx context.Context, php, composer, root, pkg, version string, environment []string, allow bool) error {
+	args := []string{composer, "create-project", "--no-interaction", "--prefer-dist", "--no-progress", "--no-scripts", "--", pkg, root}
+	if version != "" {
+		args = append(args, version)
+	}
+	cmd := process.PHPContext(ctx, php, args...)
+	if err := runComposer(cmd, php, composerPolicyEnv(environment, []bool{allow})); err != nil {
+		return err
+	}
+	target := filepath.Join(root, ".env")
+	if _, err := os.Stat(target); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	example, err := os.ReadFile(filepath.Join(root, ".env.example"))
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(target, example, 0600)
+}
+func InteractivePHPTools(ctx context.Context, php, composer, root string, environment []string, args []string) error {
+	dir, err := os.MkdirTemp("", "laraserve-installer-tools-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+	phpBinary := php
+	if runtime.GOOS != "windows" {
+		phpBinary = filepath.Join(dir, "php")
+		script := "#!/bin/sh\nwhile [ \"$#\" -gt 0 ]; do\n case \"$1\" in\n -d) shift 2 ;;\n -d*) shift ;;\n *) break ;;\n esac\ndone\nexec " + quote(php) + " php-cli \"$@\"\n"
+		if err = os.WriteFile(phpBinary, []byte(script), 0700); err != nil {
+			return err
+		}
+		if err = os.WriteFile(filepath.Join(dir, "composer"), []byte("#!/bin/sh\nexec "+quote(phpBinary)+" "+quote(composer)+" \"$@\"\n"), 0700); err != nil {
+			return err
+		}
+	} else {
+		escape := func(s string) string { return strings.ReplaceAll(s, "%", "%%") }
+		script := "@echo off\r\n\"" + escape(php) + "\" \"" + escape(composer) + "\" %*\r\n"
+		if err = os.WriteFile(filepath.Join(dir, "composer.bat"), []byte(script), 0600); err != nil {
+			return err
+		}
+	}
+	var out []string
+	path := ""
+	for _, v := range environment {
+		if strings.HasPrefix(v, "PATH=") {
+			path = strings.TrimPrefix(v, "PATH=")
+			continue
+		}
+		if strings.HasPrefix(v, "PHP_BINARY=") || strings.HasPrefix(v, "COMPOSER_NO_INTERACTION=") {
+			continue
+		}
+		out = append(out, v)
+	}
+	out = append(out, "PATH="+dir+string(os.PathListSeparator)+path, "PHP_BINARY="+phpBinary)
+	cmd := process.PHPContext(ctx, php, args...)
+	cmd.Dir, cmd.Env = root, out
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	// Keep the interactive child in the foreground terminal process group.
+	// Noninteractive tasks continue to use owned pipe guards.
+	return cmd.Run()
 }

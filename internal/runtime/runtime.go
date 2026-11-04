@@ -126,3 +126,6 @@ func EnsureComposer(rt *Runtime) error {
 	rt.Composer = filepath.Join(dir, "composer.phar")
 	return nil
 }
+
+// SetCacheRoot selects the private cache for a deserialized runtime.
+func (r *Runtime) SetCacheRoot(root string) { r.cacheRoot = root }

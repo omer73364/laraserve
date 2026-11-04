@@ -53,3 +53,17 @@ func TestPrivateWorkspace(t *testing.T) {
 		t.Fatal("temporary credentials were not removed")
 	}
 }
+
+func TestSignonCookieAllowsDashboardRedirect(t *testing.T) {
+	source := t.TempDir()
+	os.WriteFile(filepath.Join(source, "index.php"), []byte("<?php"), 0600)
+	w, e := Prepare(source, t.TempDir(), "http://127.0.0.1:8081", map[string]string{"DB_USERNAME": "local", "DB_PASSWORD": "private"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer w.Close()
+	b, _ := os.ReadFile(filepath.Join(w.Root, "laraserve-login.php"))
+	if !strings.Contains(string(b), "'samesite' => 'Lax'") || !strings.Contains(string(b), "hash_equals(") || !strings.Contains(string(b), "'httponly' => true") {
+		t.Fatal("sign-on redirect/cookie protection changed")
+	}
+}

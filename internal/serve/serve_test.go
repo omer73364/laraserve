@@ -32,7 +32,7 @@ func TestPHPMyAdminStaysOnLoopback(t *testing.T) {
 	c := Config{Root: "/app", Host: "0.0.0.0", Domain: "localhost", LAN: true, Port: 8080,
 		Admin: &AdminConfig{Root: "/private/phpmyadmin", Port: 8081}}
 	out := Caddyfile(c)
-	i := strings.Index(out, "http://localhost:8081 {")
+	i := strings.Index(out, "http://localhost:8081, http://127.0.0.1:8081 {")
 	if i < 0 {
 		t.Fatal("missing phpMyAdmin site")
 	}

@@ -4,23 +4,23 @@
 
 ## 🦊 Firefox shows a certificate warning
 
-Fully close Firefox, reinstall local CA trust, then reopen the browser:
+Fully close Firefox, start your app normally, then reopen the browser:
 
 ```bash
-laraserve trust
+laraserve serve ./my-app
 ```
 
-Trust installation is retried even when LaraServe previously recorded the CA as installed. On Linux, existing Firefox NSS profiles are included; failed imports show their profile paths.
+After you approve trust once, normal HTTPS startup on Linux verifies browser certificate fingerprints and trust flags, repairs failed imports, and discovers new or reset Firefox profiles. It only asks for initial approval when no trust approval is recorded. `--no-trust` skips these operations. `laraserve trust` remains an optional explicit reinstall command.
 
 <details>
 <summary>🧰 The certutil command is missing</summary>
 
 On Linux amd64 with glibc 2.35+ (including Ubuntu 22.04/24.04), LaraServe
 reuses an installed `certutil` or automatically downloads a private, verified
-copy with matching NSS libraries. Close Firefox and run:
+copy with matching NSS libraries. Close Firefox and start your app again:
 
 ```bash
-laraserve trust
+laraserve serve ./my-app
 ```
 
 First use needs internet; later imports and removals reuse the cache offline.
@@ -92,7 +92,7 @@ Do not delete database data to fix a library error. See [runtime compatibility](
 laraserve serve ./my-app --migrate
 ```
 
-LaraServe does not run migrations automatically. A fresh managed database is empty until you explicitly migrate it. A migration failure stops that invocation and is not retried during normal startup.
+For an existing project, a fresh managed database stays empty until you explicitly migrate it. New app creation may apply the initial migrations by default; this does not enable migration during later starts. A migration failure stops that invocation and is not retried during normal startup.
 
 `--migrate` explicitly applies pending migrations, including the initial schema. For a project's external database, use its normal migration workflow; LaraServe's managed connection is separate.
 
@@ -123,3 +123,25 @@ First verify that no MySQL process is using that data directory. Only then remov
 | 🗂️ | Laravel 8 | Uses its own writable `storage/` directory; use `--copy` to preserve an untouched original. |
 | 📡 | LAN HTTPS | Each client device needs to trust the local CA. |
 | 🧳 | Offline bundles | Application bundles do not contain runtime downloads or managed database data. |
+
+## Private support report
+
+`laraserve doctor` inspects current state without downloading tools, running project code, installing certificates, or changing database schemas. Save a report with:
+
+```bash
+laraserve doctor --report report.json
+```
+
+The JSON contains the LaraServe version, OS/architecture, tool and project counts, and controlled health-check messages. It excludes paths, domains, environment variables, credentials, raw errors, configuration contents, and logs. It refuses to overwrite an existing file. Send or attach a report only when you choose to share it.
+
+## Background startup or stale ownership
+
+Use `laraserve status <path-or-ID>` and the private startup log printed by `start`. For first-time administrator prompts, use foreground `serve` once; background workers have no interactive input.
+
+A remembered busy port requires an explicit `--port` override. Duplicate owners are rejected; use `stop` or `restart` instead of deleting lock files. Known stale MySQL ownership is recovered after the previous owner exits; unknown legacy locks are preserved for verification. See [project lifecycle](projects.md).
+
+## Dashboard asks for its private link
+
+Open the complete link printed by `laraserve dashboard`, including its fragment. The browser removes that fragment after session setup. Restarting the command creates a new session, so an old browser tab may need the new link. Use the printed `127.0.0.1` address; aliases and forwarded Hosts are deliberately rejected. A port conflict can be resolved by omitting `--port` to select an available port.
+
+Dashboard actions use saved reusable settings and cannot answer privileged or dependency-consent prompts. Complete initial setup through `serve`, then use the dashboard. A pending download can outlive a dashboard wait; check status and Startup logs before trying another start. See [the dashboard guide](dashboard.md) for log and resource-counter limits.

@@ -2,12 +2,12 @@
 package hosts
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
+	"laraserve/internal/activity"
+	"laraserve/internal/elevate"
 	"net"
 	"os"
-	"os/exec"
 	goruntime "runtime"
 	"sort"
 	"strings"
@@ -124,11 +124,28 @@ func write(content string) error {
 	if !errors.Is(err, os.ErrPermission) {
 		return err
 	}
-	if goruntime.GOOS == "windows" {
-		return errors.New("permission denied: run laraserve from an Administrator terminal")
+
+	temp, createErr := os.CreateTemp("", "laraserve-hosts-*")
+	if createErr != nil {
+		return createErr
 	}
-	cmd := exec.Command("sudo", "tee", Path())
-	cmd.Stdin = bytes.NewBufferString(content)
+	defer os.Remove(temp.Name())
+	if _, createErr = temp.WriteString(content); createErr != nil {
+		temp.Close()
+		return createErr
+	}
+	if createErr = temp.Close(); createErr != nil {
+		return createErr
+	}
+	cmd, authErr := elevate.Command("cp", temp.Name(), Path())
+	if authErr != nil {
+		return authErr
+	}
+	cmd.Stdin = nil
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	err = cmd.Run()
+	if err == nil {
+		activity.Detail("Local domain configured")
+	}
+	return err
 }

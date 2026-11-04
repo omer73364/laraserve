@@ -110,7 +110,7 @@ LaraServe detects an app through `artisan` and `laravel/framework` in `composer.
 
 Modern Laravel apps receive private storage and cache paths through environment variables. Missing `APP_KEY` and SQLite setup are prepared in private state. Missing dependencies add `vendor/` to the project. Laravel 8 uses its own writable `storage/`; use `--copy` for an untouched original.
 
-Migrations never run automatically, including for a fresh SQLite or private MySQL database. Use `serve --migrate` to explicitly apply pending migrations. A failure stops that invocation; normal startup does not retry it. New projects are created with Composer scripts disabled to prevent Laravel creation hooks from migrating; LaraServe copies `.env.example` to `.env` when needed, and supplies a private application key during serving. Other creation hooks are skipped too.
+Existing projects never invoke migrations automatically, including when provisioning a fresh private database for them. Use `serve --migrate` or a confirmed Artisan task to apply them. New project creation is the exception: the built-in creator applies initial migrations to the new private database by default (`--migrate=false` opts out), and the native `--wizard` follows the installer setup before preparing the private schema. Existing private state at the same destination blocks creation rather than applying a new app's schema to retained data. See [project tools](project-tools.md).
 
 ## 🗄️ Database behavior
 
@@ -200,3 +200,11 @@ Windows amd64 uses official PHP Windows NTS ZIP builds (7.4 and 8.0–8.5) and a
 Managed Windows MySQL uses an ephemeral IPv4 loopback TCP port, because Unix sockets are unavailable. A private generated root password is configured through an initialization file before startup readiness, and applications receive a separate database-scoped account. The initialization file is removed after startup. Shutdown requests use authenticated SQL before falling back to process termination. phpMyAdmin uses the same loopback host and port. External databases remain available with `--mysql=false`.
 
 Windows cache installation uses OS file locks. Custom hosts-file changes require an Administrator terminal; `.localhost` names avoid that requirement. CA trust uses Windows' current-user certificate store. See [Windows setup and verification](windows.md).
+
+### Automatic trust recovery
+
+After initial trust approval, Linux HTTPS startup verifies the CA certificate and NSS trust flags in discovered browser profiles. Missing, failed, or reset imports are retried automatically, using private cached tools if system NSS tools are absent. A missing or replaced recorded system anchor also triggers repair. Healthy anchors avoid another system installation. `--no-trust` skips repair and leaves existing trust records untouched, including when local certificate constraints change.
+
+### Project lifecycle state
+
+Private `registry/` records store canonical source identities, resolved roots, reusable arguments, selected runtimes, and domain/port assignments. `control/` holds authenticated owner metadata and private startup logs. Source aliases share ownership; old private state IDs are preserved when importing existing direct projects. See [project lifecycle](projects.md) for commands, restart semantics, and platform limits.

@@ -2,12 +2,15 @@
 package mysql
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"fmt"
 	mysqldriver "github.com/go-sql-driver/mysql"
+	"laraserve/internal/filelock"
+	"laraserve/internal/process"
 	"laraserve/internal/runtime"
 	"net"
 	"os"
@@ -68,14 +71,27 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 	if err := os.Chmod(stateDir, 0o700); err != nil {
 		return nil, err
 	}
+	ownerRelease, ownerAcquired, err := filelock.Try(filepath.Join(stateDir, "owner.lock"))
+	if err != nil {
+		return nil, err
+	}
+	if !ownerAcquired {
+		return nil, fmt.Errorf("MySQL state is owned by another active server")
+	}
+	ownershipTransferred := false
+	defer func() {
+		if !ownershipTransferred {
+			ownerRelease()
+		}
+	}()
 	lock := filepath.Join(stateDir, "running.lock")
-	if err := os.Mkdir(lock, 0o700); err != nil {
+	if err := acquireStateDirectory(parent, lock); err != nil {
 		return nil, fmt.Errorf("MySQL state is locked (%s); stop the other instance first. After a crash, verify no mysqld uses this data before removing the lock: %w", lock, err)
 	}
 	started := false
 	defer func() {
 		if !started {
-			_ = os.Remove(lock)
+			releaseStateDirectory(lock)
 		}
 	}()
 	appName := "laraserve"
@@ -116,7 +132,18 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 		initCtx, cancel := context.WithTimeout(parent, 2*time.Minute)
 		cmd := exec.CommandContext(initCtx, server, append(common, "--initialize-insecure")...)
 		cmd.Env = env
-		out, initErr := cmd.CombinedOutput()
+		var output bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &output, &output
+		initErr := process.StartOwned(cmd)
+		if initErr == nil {
+			if recordErr := recordOwner(lock, cmd.Process.Pid); recordErr != nil {
+				cancel()
+				_ = process.WaitOwned(cmd)
+				return nil, recordErr
+			}
+			initErr = process.WaitOwned(cmd)
+		}
+		out := output.Bytes()
 		cancel()
 		if initErr != nil {
 			return nil, fmt.Errorf("MySQL initialization failed: %w\n%s\nPartial data was kept in %s", initErr, out, data)
@@ -181,17 +208,25 @@ func Start(parent context.Context, base, stateDir string, env []string, appNames
 		return cmd.Process.Signal(syscall.SIGTERM)
 	}
 	cmd.WaitDelay = 30 * time.Second
-	if err := cmd.Start(); err != nil {
+	if err := process.StartOwned(cmd); err != nil {
 		cancel()
 		log.Close()
 		return nil, err
 	}
+	if err := recordOwner(lock, cmd.Process.Pid); err != nil {
+		cancel()
+		_ = process.WaitOwned(cmd)
+		log.Close()
+		return nil, err
+	}
+	ownershipTransferred = true
 	s := &Server{Socket: socket, Dir: stateDir, done: make(chan struct{}), cancel: cancel}
 	go func() {
-		s.err = cmd.Wait()
+		s.err = process.WaitOwned(cmd)
 		log.Close()
 		_ = os.RemoveAll(sockets)
-		_ = os.Remove(lock)
+		releaseStateDirectory(lock)
+		ownerRelease()
 		close(s.done)
 	}()
 	started = true

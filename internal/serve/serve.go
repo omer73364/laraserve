@@ -108,7 +108,7 @@ func Caddyfile(c Config) string {
 	}
 	b.WriteString("\n}\n")
 	if c.Admin != nil {
-		fmt.Fprintf(&b, "\n%s://localhost:%d {\n\tbind 127.0.0.1\n", scheme, c.Admin.Port)
+		fmt.Fprintf(&b, "\n%s://localhost:%d, %s://127.0.0.1:%d {\n\tbind 127.0.0.1\n", scheme, c.Admin.Port, scheme, c.Admin.Port)
 		if c.HTTPS {
 			fmt.Fprintf(&b, "\ttls %s %s\n", q(c.Cert), q(c.Key))
 		}
@@ -230,12 +230,12 @@ func Run(c Config, onReady func()) error {
 	}
 	cmd.Cancel = func() error { return process.Stop(cmd) }
 	cmd.WaitDelay = 5 * time.Second
-	if err := cmd.Start(); err != nil {
+	if err := process.StartOwned(cmd); err != nil {
 		return err
 	}
 
 	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	go func() { done <- process.WaitOwned(cmd) }()
 
 	ready := make(chan error, 1)
 	go func() { ready <- waitReady(ctx, c) }()

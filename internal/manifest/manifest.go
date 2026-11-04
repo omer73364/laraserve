@@ -5,6 +5,7 @@ package manifest
 import (
 	"encoding/json"
 	"errors"
+	"laraserve/internal/statefile"
 	"os"
 	"sort"
 )
@@ -53,11 +54,7 @@ func Load(path string) (*Manifest, error) {
 }
 
 func (m *Manifest) Save() error {
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(m.path, b, 0o600)
+	return statefile.WriteJSON(m.path, m)
 }
 
 func (m *Manifest) Project(id, path string) *Project {

@@ -104,7 +104,7 @@ func Prepare(source, stateDir, baseURL string, db map[string]string) (*Workspace
 		"ini_set('session.use_strict_mode', '1');\n" +
 		"session_save_path(" + phpString(filepath.Join(dir, "sessions")) + ");\n" +
 		"session_name(" + phpString(session) + ");\n" +
-		"session_set_cookie_params(['path' => '/', 'secure' => " + secure + ", 'httponly' => true, 'samesite' => 'Strict']);\n" +
+		"session_set_cookie_params(['path' => '/', 'secure' => " + secure + ", 'httponly' => true, 'samesite' => 'Lax']);\n" +
 		"session_start();\nsession_regenerate_id(true);\n" +
 		"$_SESSION['PMA_single_signon_user'] = " + phpString(db["DB_USERNAME"]) + ";\n" +
 		"$_SESSION['PMA_single_signon_password'] = " + phpString(db["DB_PASSWORD"]) + ";\n" +
