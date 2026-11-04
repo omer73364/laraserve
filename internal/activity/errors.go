@@ -83,7 +83,21 @@ func (w *Output) Error(err error) error {
 	text := strings.TrimSpace(ansi.ReplaceAllString(string(w.tail), ""))
 	lines := strings.Split(text, "\n")
 	if len(lines) > 18 {
-		lines = lines[len(lines)-18:]
+		start := -1
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "npm error code ") || strings.HasPrefix(trimmed, "npm ERR! code ") {
+				start = i
+				break
+			}
+		}
+		if start >= 0 && start < len(lines)-18 {
+			// npm can print a long help footer after the actual dependency error.
+			// Keep its cause as well as the end of the output.
+			lines = append(append(append([]string{}, lines[start:start+12]...), "…"), lines[len(lines)-6:]...)
+		} else {
+			lines = lines[len(lines)-18:]
+		}
 	}
 	return fmt.Errorf("%w\n%s", err, bounded(strings.Join(lines, "\n")))
 }
