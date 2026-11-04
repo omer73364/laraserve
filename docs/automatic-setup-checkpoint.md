@@ -6,7 +6,7 @@ Build: `0.1.0-phase5.1-ui.5`. This extends Phase 5; no Phase 6 or GitHub workflo
 
 Start prepares a missing environment file, PHP/Composer dependencies, project-compatible Node/frontend dependencies, and detected local frontend/Redis/mail services. Existing databases are never automatically migrated. Queue workers and schedulers stay deliberate selections.
 
-Preparation has named steps, checked completion, skipped/not-run states, download counters, an inline actual error, and collapsible logs. Activity and each project’s Commands show named task history with separate output. Common shortcuts include list, migrations/status/rollback, cache/config/view clearing, storage linking, queue restart, and npm install/build.
+Preparation has named steps, checked completion, skipped/not-run states, download counters, an inline actual error, and collapsible logs. Activity and each project’s Commands show named task history with separate output. Common shortcuts include list, migrations/status/rollback, cache/config/view clearing, storage linking, and npm install/build.
 
 Automatic port choices are separate from actual assigned ports, and domain names are never silently substituted in automatic setup. Hosts/trust operations request OS authorization without collecting passwords in LaraServe. The phpMyAdmin sign-on cookie and loopback host routing have been corrected.
 
